@@ -39,7 +39,14 @@ export function matchesTask(task, query) {
     task.itemName,
     task.mx,
     task.box,
-    task.pickerId
+    task.floor,
+    task.row,
+    task.place,
+    task.shelf,
+    task.cell,
+    task.action,
+    task.comment,
+    task.sourceLabel
   ].map(normalizeText).join(' ');
   return haystack.includes(normalized);
 }
@@ -54,4 +61,3 @@ export function formatTime(value) {
     second: '2-digit'
   }).format(date);
 }
-

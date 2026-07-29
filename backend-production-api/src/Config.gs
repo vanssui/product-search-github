@@ -10,7 +10,7 @@ var APP_CONFIG = {
   zoneNames: ['B3', 'B4', 'B5'],
   activeStatus: 'Поиск',
   cachePrefix: 'prod_catalog_v2_',
-  cacheSeconds: 20,
+  cacheSeconds: 300,
   maxTailRowsPerSheet: 5000,
   maxPageSize: 100,
   maxPhotoBytes: 8 * 1024 * 1024,

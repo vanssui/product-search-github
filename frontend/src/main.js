@@ -1,10 +1,14 @@
 import './styles/app.css';
 import { ApiClient, ApiError } from './api.js';
 import { createStore, saveEmployeeId, saveQuery } from './state.js';
-import { formatRoute, formatTime, splitWbStickers } from './utils.js';
+import { formatRoute, formatTime, matchesTask, splitWbStickers } from './utils.js';
 
 const api = new ApiClient(import.meta.env.VITE_BACKEND_URL);
+const PAGE_SIZE = 60;
+const SNAPSHOT_PAGE_SIZE = 100;
 const store = createStore({
+  allTasks: [],
+  catalogComplete: false,
   blocks: [],
   floors: [],
   zone: '',
@@ -17,6 +21,7 @@ const store = createStore({
   page: 1,
   pageCount: 1,
   hasMore: false,
+  visibleLimit: PAGE_SIZE,
   selectedToken: sessionStorage.getItem('product_search_selected_task') || '',
   photoBusy: false
 });
@@ -208,13 +213,78 @@ function catalogParams(state, page) {
     myOnly: state.myOnly,
     employeeId: state.employeeId,
     page,
-    pageSize: 60
+    pageSize: PAGE_SIZE
   };
+}
+
+function applyLocalCatalog(patch = {}, { resetLimit = true } = {}) {
+  const current = { ...store.get(), ...patch };
+  if (!current.catalogComplete) return false;
+
+  const employeeId = String(current.employeeId || '').trim().toUpperCase();
+  const baseTasks = current.allTasks.filter((task) => {
+    if (current.photoOnly && !task.hasPhoto) return false;
+    if (current.myOnly &&
+        String(task.employeeId || '').trim().toUpperCase() !== employeeId) return false;
+    return matchesTask(task, current.query);
+  });
+
+  const blockCounts = new Map();
+  baseTasks.forEach((task) => {
+    const zone = String(task.zone || '').trim();
+    if (zone) blockCounts.set(zone, (blockCounts.get(zone) || 0) + 1);
+  });
+  const blocks = [...blockCounts.entries()]
+    .sort(([left], [right]) => left.localeCompare(right, 'ru', { numeric: true }))
+    .map(([id, count]) => ({ id, label: id, count }));
+
+  const zoneTasks = current.zone
+    ? baseTasks.filter((task) => task.zone === current.zone)
+    : baseTasks;
+  const floorCounts = new Map();
+  zoneTasks.forEach((task) => {
+    const floor = String(task.floor || '').trim() || 'Без этажа';
+    floorCounts.set(floor, (floorCounts.get(floor) || 0) + 1);
+  });
+  const floors = [...floorCounts.entries()]
+    .sort(([left], [right]) => left.localeCompare(right, 'ru', { numeric: true }))
+    .map(([id, count]) => ({ id, label: id, count }));
+
+  const matching = current.floor
+    ? zoneTasks.filter((task) =>
+      (String(task.floor || '').trim() || 'Без этажа') === current.floor)
+    : zoneTasks;
+  const visibleLimit = resetLimit ? PAGE_SIZE : (current.visibleLimit || PAGE_SIZE);
+  const tasks = matching.slice(0, visibleLimit);
+
+  store.set({
+    ...patch,
+    tasks,
+    blocks,
+    floors,
+    filteredCount: matching.length,
+    totalActive: current.allTasks.length,
+    photoCount: matching.filter((task) => task.hasPhoto).length,
+    page: Math.max(1, Math.ceil(tasks.length / PAGE_SIZE)),
+    pageCount: Math.max(1, Math.ceil(matching.length / PAGE_SIZE)),
+    hasMore: tasks.length < matching.length,
+    visibleLimit,
+    loading: false
+  });
+  return true;
 }
 
 async function loadCatalog({ append = false, silent = false } = {}) {
   const state = store.get();
   if (state.loading || state.offline) return;
+  if (append && state.catalogComplete) {
+    applyLocalCatalog(
+      { visibleLimit: state.visibleLimit + PAGE_SIZE },
+      { resetLimit: false }
+    );
+    return;
+  }
+
   const sequence = ++requestSequence;
   const page = append ? state.page + 1 : 1;
   const startedAt = performance.now();
@@ -223,11 +293,40 @@ async function loadCatalog({ append = false, silent = false } = {}) {
   if (!silent) setNotice('');
 
   try {
-    const data = await api.get('getCatalog', catalogParams(state, page));
+    const parameters = append
+      ? catalogParams(state, page)
+      : { page: 1, pageSize: SNAPSHOT_PAGE_SIZE };
+    const data = await api.get('getCatalog', parameters);
     if (sequence !== requestSequence) return;
+
+    const returnedTasks = data.tasks || [];
+    const isCompleteSnapshot = !append &&
+      !data.hasMore &&
+      returnedTasks.length === (data.totalActive || 0);
+    if (isCompleteSnapshot) {
+      store.set({
+        allTasks: returnedTasks,
+        catalogComplete: true,
+        totalActive: data.totalActive || 0,
+        generatedAt: data.generatedAt || new Date().toISOString(),
+        visibleLimit: PAGE_SIZE,
+        loading: false
+      });
+      applyLocalCatalog({}, { resetLimit: true });
+      recordMetric('catalog_load', startedAt, {
+        serverGeneratedAt: data.generatedAt,
+        returned: returnedTasks.length,
+        filteredCount: data.totalActive || 0,
+        localFiltering: true
+      });
+      if (store.get().selectedToken) restoreSelectedTask();
+      return;
+    }
+
     const tasks = append ? [...store.get().tasks, ...(data.tasks || [])] : (data.tasks || []);
     store.set({
       tasks,
+      catalogComplete: false,
       blocks: data.blocks || [],
       floors: data.floors || [],
       filteredCount: data.filteredCount || 0,
@@ -512,6 +611,10 @@ function closeProfile() {
 }
 
 function updateFilters(patch) {
+  if (store.get().catalogComplete) {
+    applyLocalCatalog({ ...patch, visibleLimit: PAGE_SIZE }, { resetLimit: true });
+    return;
+  }
   store.set({ ...patch, page: 1, tasks: [] });
   loadCatalog();
 }

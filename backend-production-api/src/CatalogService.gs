@@ -115,17 +115,23 @@ function getTaskSnapshot_() {
   if (cached) return cached;
 
   var lock = LockService.getScriptLock();
-  var hasLock = lock.tryLock(5000);
+  var hasLock = lock.tryLock(45000);
+  if (!hasLock) {
+    cached = readSnapshotCache_();
+    if (cached) return cached;
+    throw apiError_(
+      'BACKEND_BUSY',
+      'Каталог обновляется. Повторите запрос через несколько секунд.'
+    );
+  }
   try {
-    if (hasLock) {
-      cached = readSnapshotCache_();
-      if (cached) return cached;
-    }
+    cached = readSnapshotCache_();
+    if (cached) return cached;
     var built = buildTaskSnapshot_();
     writeSnapshotCache_(built);
     return built;
   } finally {
-    if (hasLock) lock.releaseLock();
+    lock.releaseLock();
   }
 }
 
