@@ -1,0 +1,15 @@
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+.clasprc.json
+**/.clasprc.json
+backend-apps-script/.clasp.json
+github-migration-result.md
+*.pem
+*.key
+service-account*.json
+credentials*.json
+.DS_Store
+coverage/
