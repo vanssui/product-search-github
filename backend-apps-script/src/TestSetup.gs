@@ -43,6 +43,9 @@ function setupTestEnvironment() {
   APP_CONFIG.sourceSheets.forEach(function(config, sheetIndex) {
     var sheet = spreadsheet.getSheetByName(config.name) || spreadsheet.insertSheet(config.name);
     sheet.clear();
+    sheet
+      .getRange(1, 1, sheet.getMaxRows(), sheet.getMaxColumns())
+      .clearDataValidations();
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
     var rows = [];
     for (var index = 0; index < 20; index += 1) {
@@ -87,7 +90,11 @@ function setupTestEnvironment() {
   logSheet.setFrozenRows(1);
   var temp = spreadsheet.getSheetByName('__SETUP_TEMP__');
   if (temp && spreadsheet.getSheets().length > 1) spreadsheet.deleteSheet(temp);
-  PropertiesService.getScriptProperties().deleteAllProperties();
+  var scriptProperties = PropertiesService.getScriptProperties();
+  var allProperties = scriptProperties.getProperties();
+  Object.keys(allProperties).forEach(function(key) {
+    if (key.indexOf('IDEMP_') === 0) scriptProperties.deleteProperty(key);
+  });
   clearTaskCache_();
   SpreadsheetApp.flush();
 
@@ -107,4 +114,3 @@ function pad2_(value) {
 function pad3_(value) {
   return ('00' + value).slice(-3);
 }
-
