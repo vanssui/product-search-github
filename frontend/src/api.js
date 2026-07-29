@@ -1,6 +1,7 @@
-const DEFAULT_READ_TIMEOUT_MS = 25000;
+const DEFAULT_READ_TIMEOUT_MS = 45000;
 const DEFAULT_WRITE_TIMEOUT_MS = 45000;
-const DEFAULT_CONFIRM_ATTEMPTS = 12;
+const DEFAULT_CONFIRM_TIMEOUT_MS = 15000;
+const DEFAULT_CONFIRM_ATTEMPTS = 4;
 const DEFAULT_CONFIRM_DELAY_MS = 1500;
 const AMBIGUOUS_WRITE_CODES = new Set([
   'TIMEOUT',
@@ -33,6 +34,7 @@ export class ApiClient {
     this.baseUrl = String(baseUrl || '').trim();
     this.readTimeoutMs = options.readTimeoutMs || options.timeoutMs || DEFAULT_READ_TIMEOUT_MS;
     this.writeTimeoutMs = options.writeTimeoutMs || DEFAULT_WRITE_TIMEOUT_MS;
+    this.confirmTimeoutMs = options.confirmTimeoutMs || DEFAULT_CONFIRM_TIMEOUT_MS;
     this.confirmAttempts = options.confirmAttempts || DEFAULT_CONFIRM_ATTEMPTS;
     this.confirmDelayMs = options.confirmDelayMs ?? DEFAULT_CONFIRM_DELAY_MS;
   }
@@ -92,7 +94,7 @@ export class ApiClient {
           writeAction: action,
           idempotencyKey
         }, {
-          timeoutMs: options.confirmTimeoutMs || this.readTimeoutMs
+          timeoutMs: options.confirmTimeoutMs || this.confirmTimeoutMs
         });
         if (status?.completed) return status.result;
       } catch (error) {
