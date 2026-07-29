@@ -17,3 +17,8 @@
 ```
 
 Значения, экспорт Script Properties, `.clasp.json`, OAuth credentials и deployment URL не должны коммититься.
+
+`setupTestEnvironment()` разрешена только при `APP_CONFIG.environment = test`.
+Перед очисткой Drive функция дополнительно проверяет, что имя папки начинается с
+`Product Search GitHub TEST`. Все файлы из этой изолированной папки перемещаются
+в корзину, а свойства `CLAIM_*` и `IDEMP_*` очищаются.

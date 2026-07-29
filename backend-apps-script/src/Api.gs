@@ -2,7 +2,9 @@ var READ_ACTIONS_ = {
   health: function(payload) { return getHealth_(); },
   getTasks: function(payload) { return getTasksApi_(payload); },
   getTaskDetails: function(payload) { return getTaskDetailsApi_(payload); },
-  getTaskPhoto: function(payload) { return getTaskPhotoApi_(payload); }
+  getTaskPhoto: function(payload) { return getTaskPhotoApi_(payload); },
+  getOperationStatus: function(payload) { return getOperationStatusApi_(payload); },
+  getTestEnvironmentStatus: function(payload) { return getTestEnvironmentStatusApi_(); }
 };
 
 var WRITE_ACTIONS_ = {
@@ -42,6 +44,7 @@ function parsePostPayload_(e) {
 }
 
 function handleApiRequest_(action, payload, isWrite) {
+  var startedAt = Date.now();
   var requestId = clampText_(payload && payload.requestId, 100) || Utilities.getUuid();
   var timestamp = nowIso_();
 
@@ -61,7 +64,8 @@ function handleApiRequest_(action, payload, isWrite) {
       data: data,
       error: null,
       requestId: requestId,
-      timestamp: timestamp
+      timestamp: timestamp,
+      meta: { serverDurationMs: Date.now() - startedAt }
     });
   } catch (error) {
     var code = error && error.apiCode ? error.apiCode : 'INTERNAL_ERROR';
@@ -74,7 +78,8 @@ function handleApiRequest_(action, payload, isWrite) {
       data: null,
       error: { code: code, message: message },
       requestId: requestId,
-      timestamp: timestamp
+      timestamp: timestamp,
+      meta: { serverDurationMs: Date.now() - startedAt }
     });
   }
 }
@@ -96,7 +101,7 @@ function getHealth_() {
 
 function withIdempotency_(action, payload, requestId, operation) {
   var idempotencyKey = requireText_(payload.idempotencyKey, 'idempotencyKey', 240);
-  var propertyKey = 'IDEMP_' + hashWebSafe_(action + ':' + idempotencyKey).slice(0, 44);
+  var propertyKey = idempotencyPropertyKey_(action, idempotencyKey);
   var properties = PropertiesService.getScriptProperties();
   var existing = safeJsonParse_(properties.getProperty(propertyKey), null);
   var now = Date.now();
@@ -113,6 +118,36 @@ function withIdempotency_(action, payload, requestId, operation) {
   }));
   cleanupIdempotencyProperties_(properties, now);
   return result;
+}
+
+function idempotencyPropertyKey_(action, idempotencyKey) {
+  return 'IDEMP_' + hashWebSafe_(action + ':' + idempotencyKey).slice(0, 44);
+}
+
+function getOperationStatusApi_(payload) {
+  var writeAction = requireText_(payload.writeAction, 'writeAction', 80);
+  var idempotencyKey = requireText_(payload.idempotencyKey, 'idempotencyKey', 240);
+  if (!WRITE_ACTIONS_[writeAction]) {
+    throw apiError_('ACTION_NOT_ALLOWED', 'Нельзя проверить неизвестную операцию.');
+  }
+
+  var properties = PropertiesService.getScriptProperties();
+  var propertyKey = idempotencyPropertyKey_(writeAction, idempotencyKey);
+  var existing = safeJsonParse_(properties.getProperty(propertyKey), null);
+  if (!existing || !existing.createdAt) {
+    return { completed: false, state: 'pending_or_unknown' };
+  }
+  if (Date.now() - existing.createdAt > APP_CONFIG.idempotencyTtlMs) {
+    properties.deleteProperty(propertyKey);
+    return { completed: false, state: 'expired' };
+  }
+  return {
+    completed: true,
+    state: 'completed',
+    result: existing.result,
+    originalRequestId: existing.requestId || '',
+    completedAt: new Date(existing.createdAt).toISOString()
+  };
 }
 
 function cleanupIdempotencyProperties_(properties, now) {
@@ -153,4 +188,3 @@ function logApiError_(requestId, action, code, error) {
     console.error('Could not append API error log: ' + logError.message);
   }
 }
-

@@ -209,6 +209,8 @@ async function takeSelectedTask() {
       rowNumber: task.rowNumber,
       taskToken: task.taskToken,
       idempotencyKey: `take:${identity.sessionId}:${task.taskToken}`
+    }, {
+      onUncertain: () => setSheetMessage('Ответ задерживается. Проверяю, закреплено ли задание…')
     });
     store.set({ claim: { ...claim, owned: true }, saving: false });
     setSheetMessage(`Задание ваше до ${formatTime(claim.expiresAt)}.`, 'success');
@@ -225,7 +227,12 @@ async function releaseSelectedTask() {
   store.set({ saving: true });
   updateActionState();
   try {
-    await api.post('releaseTask', { ...payload, idempotencyKey: `release:${payload.sessionId}:${payload.taskToken}` });
+    await api.post('releaseTask', {
+      ...payload,
+      idempotencyKey: `release:${payload.sessionId}:${payload.taskToken}`
+    }, {
+      onUncertain: () => setSheetMessage('Ответ задерживается. Проверяю освобождение задания…')
+    });
     store.set({ claim: null, saving: false });
     setSheetMessage('Задание освобождено.', 'success');
   } catch (error) {
@@ -245,6 +252,8 @@ async function completeSelectedTask(newStatus) {
     const result = await api.post('completeTask', {
       ...payload,
       idempotencyKey: `complete:${payload.sessionId}:${payload.taskToken}:${newStatus}`
+    }, {
+      onUncertain: () => setSheetMessage('Ответ задерживается. Проверяю сохранённый результат…')
     });
     store.update((state) => ({
       saving: false,
@@ -290,6 +299,8 @@ async function uploadPhoto(file) {
       mimeType: 'image/jpeg',
       dataUrl,
       idempotencyKey: `photo:${payload.sessionId}:${payload.taskToken}:${file.name}:${file.size}`
+    }, {
+      onUncertain: () => setSheetMessage('Ответ задерживается. Проверяю, сохранено ли фото…')
     });
     store.set({ saving: false });
     setSheetMessage(`Фото загружено (${result.photoCount}).`, 'success');
@@ -345,4 +356,3 @@ document.addEventListener('visibilitychange', scheduleRefresh);
 store.subscribe(render);
 render(store.get());
 loadTasks();
-

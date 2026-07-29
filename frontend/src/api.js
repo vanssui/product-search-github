@@ -1,4 +1,14 @@
-const DEFAULT_TIMEOUT_MS = 25000;
+const DEFAULT_READ_TIMEOUT_MS = 25000;
+const DEFAULT_WRITE_TIMEOUT_MS = 45000;
+const DEFAULT_CONFIRM_ATTEMPTS = 12;
+const DEFAULT_CONFIRM_DELAY_MS = 1500;
+const AMBIGUOUS_WRITE_CODES = new Set([
+  'TIMEOUT',
+  'NETWORK_ERROR',
+  'HTTP_502',
+  'HTTP_503',
+  'HTTP_504'
+]);
 
 export class ApiError extends Error {
   constructor(code, message, requestId = '') {
@@ -21,7 +31,10 @@ function delay(ms) {
 export class ApiClient {
   constructor(baseUrl, options = {}) {
     this.baseUrl = String(baseUrl || '').trim();
-    this.timeoutMs = options.timeoutMs || DEFAULT_TIMEOUT_MS;
+    this.readTimeoutMs = options.readTimeoutMs || options.timeoutMs || DEFAULT_READ_TIMEOUT_MS;
+    this.writeTimeoutMs = options.writeTimeoutMs || DEFAULT_WRITE_TIMEOUT_MS;
+    this.confirmAttempts = options.confirmAttempts || DEFAULT_CONFIRM_ATTEMPTS;
+    this.confirmDelayMs = options.confirmDelayMs ?? DEFAULT_CONFIRM_DELAY_MS;
   }
 
   assertConfigured() {
@@ -35,7 +48,7 @@ export class ApiClient {
     let lastError;
     for (let attempt = 0; attempt < 2; attempt += 1) {
       try {
-        return await this.request('GET', action, params);
+        return await this.request('GET', action, params, { timeoutMs: this.readTimeoutMs });
       } catch (error) {
         lastError = error;
         if (attempt > 0 || (error instanceof ApiError && !['TIMEOUT', 'NETWORK_ERROR', 'HTTP_503'].includes(error.code))) {
@@ -47,15 +60,65 @@ export class ApiClient {
     throw lastError;
   }
 
-  async post(action, payload = {}) {
+  async post(action, payload = {}, options = {}) {
     this.assertConfigured();
-    return this.request('POST', action, payload);
+    try {
+      return await this.request('POST', action, payload, {
+        timeoutMs: options.timeoutMs || this.writeTimeoutMs
+      });
+    } catch (error) {
+      if (!this.canConfirmWrite(error, payload)) throw error;
+      options.onUncertain?.(error);
+      return this.confirmWrite(action, payload.idempotencyKey, options);
+    }
   }
 
-  async request(method, action, payload) {
+  canConfirmWrite(error, payload) {
+    return Boolean(
+      payload?.idempotencyKey &&
+      error instanceof ApiError &&
+      AMBIGUOUS_WRITE_CODES.has(error.code)
+    );
+  }
+
+  async confirmWrite(action, idempotencyKey, options = {}) {
+    const attempts = options.confirmAttempts || this.confirmAttempts;
+    const delayMs = options.confirmDelayMs ?? this.confirmDelayMs;
+    let lastRequestId = '';
+
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
+      try {
+        const status = await this.request('GET', 'getOperationStatus', {
+          writeAction: action,
+          idempotencyKey
+        }, {
+          timeoutMs: options.confirmTimeoutMs || this.readTimeoutMs
+        });
+        if (status?.completed) return status.result;
+      } catch (error) {
+        if (!(error instanceof ApiError) || !AMBIGUOUS_WRITE_CODES.has(error.code)) {
+          throw error;
+        }
+        lastRequestId = error.requestId || lastRequestId;
+      }
+
+      if (attempt < attempts - 1 && delayMs > 0) await delay(delayMs);
+    }
+
+    throw new ApiError(
+      'RESULT_UNKNOWN',
+      'Ответ сервера задерживается, а результат пока не подтверждён. Обновите состояние задания перед повтором.',
+      lastRequestId
+    );
+  }
+
+  async request(method, action, payload, options = {}) {
     const requestId = newRequestId();
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+    const timer = setTimeout(
+      () => controller.abort(),
+      options.timeoutMs || this.readTimeoutMs
+    );
     let response;
 
     try {
@@ -116,4 +179,3 @@ export class ApiClient {
     return envelope.data;
   }
 }
-

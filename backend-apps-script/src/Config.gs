@@ -5,6 +5,7 @@ var APP_CONFIG = {
   spreadsheetId: '',
   spreadsheetNamePrefix: '',
   photoFolderId: '',
+  testPhotoFolderNamePrefix: 'Product Search GitHub TEST',
   sourceSheets: [],
   zoneNames: ['B3', 'B4', 'B5'],
   activeStatus: 'Поиск',

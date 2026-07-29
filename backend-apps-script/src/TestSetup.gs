@@ -1,8 +1,8 @@
 function setupTestEnvironment() {
-  if (APP_CONFIG.environment !== 'test') {
-    throw new Error('setupTestEnvironment разрешена только в test.');
-  }
+  assertTestEnvironment_();
   var spreadsheet = getSpreadsheet_();
+  var photoFolder = getIsolatedTestPhotoFolder_();
+  var deletedPhotoCount = clearTestPhotoFolder_(photoFolder);
   var sourceNames = APP_CONFIG.sourceSheets.map(function(config) { return config.name; });
   var keepNames = sourceNames.concat([APP_CONFIG.logSheetName]);
 
@@ -92,8 +92,12 @@ function setupTestEnvironment() {
   if (temp && spreadsheet.getSheets().length > 1) spreadsheet.deleteSheet(temp);
   var scriptProperties = PropertiesService.getScriptProperties();
   var allProperties = scriptProperties.getProperties();
+  var clearedStatePropertyCount = 0;
   Object.keys(allProperties).forEach(function(key) {
-    if (key.indexOf('IDEMP_') === 0) scriptProperties.deleteProperty(key);
+    if (key.indexOf('IDEMP_') === 0 || key.indexOf('CLAIM_') === 0) {
+      scriptProperties.deleteProperty(key);
+      clearedStatePropertyCount += 1;
+    }
   });
   clearTaskCache_();
   SpreadsheetApp.flush();
@@ -103,7 +107,61 @@ function setupTestEnvironment() {
     spreadsheetId: spreadsheet.getId(),
     sheets: keepNames,
     testRows: globalIndex,
-    photoFolderId: APP_CONFIG.photoFolderId
+    photoFolderId: APP_CONFIG.photoFolderId,
+    deletedPhotoCount: deletedPhotoCount,
+    clearedStatePropertyCount: clearedStatePropertyCount
+  };
+}
+
+function assertTestEnvironment_() {
+  if (APP_CONFIG.environment !== 'test') {
+    throw new Error('Операция разрешена только в test environment.');
+  }
+}
+
+function getIsolatedTestPhotoFolder_() {
+  assertTestEnvironment_();
+  hydrateRuntimeConfig_();
+  var folder = DriveApp.getFolderById(APP_CONFIG.photoFolderId);
+  if (folder.getName().indexOf(APP_CONFIG.testPhotoFolderNamePrefix) !== 0) {
+    throw new Error('Очистка остановлена: имя тестовой папки не соответствует защитному префиксу.');
+  }
+  return folder;
+}
+
+function clearTestPhotoFolder_(folder) {
+  var deletedCount = 0;
+  var files = folder.getFiles();
+  while (files.hasNext()) {
+    files.next().setTrashed(true);
+    deletedCount += 1;
+  }
+  return deletedCount;
+}
+
+function getTestEnvironmentStatusApi_() {
+  var folder = getIsolatedTestPhotoFolder_();
+  var photoFileCount = 0;
+  var files = folder.getFiles();
+  while (files.hasNext()) {
+    files.next();
+    photoFileCount += 1;
+  }
+
+  var stateCounts = { claimCount: 0, idempotencyCount: 0 };
+  var properties = PropertiesService.getScriptProperties().getProperties();
+  Object.keys(properties).forEach(function(key) {
+    if (key.indexOf('CLAIM_') === 0) stateCounts.claimCount += 1;
+    if (key.indexOf('IDEMP_') === 0) stateCounts.idempotencyCount += 1;
+  });
+
+  var taskState = getTasksApi_();
+  return {
+    environment: APP_CONFIG.environment,
+    activeTaskCount: taskState.count,
+    photoFileCount: photoFileCount,
+    claimCount: stateCounts.claimCount,
+    idempotencyCount: stateCounts.idempotencyCount
   };
 }
 

@@ -10,7 +10,10 @@
   "data": {},
   "error": null,
   "requestId": "uuid",
-  "timestamp": "2026-07-29T00:00:00.000Z"
+  "timestamp": "2026-07-29T00:00:00.000Z",
+  "meta": {
+    "serverDurationMs": 1200
+  }
 }
 ```
 
@@ -37,6 +40,8 @@
 | GET | `getTasks` | — | активные строки всех разрешённых листов |
 | GET | `getTaskDetails` | `sheetName`, `rowNumber`, `taskToken` | перечитать конкретную строку |
 | GET | `getTaskPhoto` | `fileId` | получить тестовое фото как base64 |
+| GET | `getOperationStatus` | `writeAction`, `idempotencyKey` | read-only подтверждение результата записи после timeout |
+| GET | `getTestEnvironmentStatus` | — | test-only счётчики задач, фото и временных свойств |
 
 ## Запись
 
@@ -81,6 +86,8 @@ Task identity:
 - владелец — пара `employeeId + sessionId`;
 - claim TTL — 10 минут;
 - обязательный idempotency key для каждой записи;
+- потерянный или долгий POST-ответ не запускает второй POST: frontend опрашивает
+  `getOperationStatus` с исходным idempotency key;
 - серверный MIME allow-list: JPEG, PNG, WebP;
 - максимальный декодированный размер фото — 5 МБ;
 - чтение фото разрешено только из тестовой папки;
@@ -88,5 +95,7 @@ Task identity:
 
 ## Важное ограничение Apps Script
 
-`ContentService` не позволяет приложению задавать произвольные CORS headers. Поэтому фактическую доступность ответов из origin GitHub Pages необходимо проверить после deployment. Если Google не вернёт разрешающий CORS header, прямой `fetch` будет заблокирован браузером, и потребуется отдельно утверждённый HTTP proxy/другой backend runtime. Это проверяется до production-подключения.
-
+`ContentService` не позволяет приложению задавать произвольные CORS headers.
+В deployment тестового backend Google возвращает `Access-Control-Allow-Origin: *`
+для redirect и конечного JSON-ответа; это проверяется реальным браузером после
+каждого изменения deployment.
