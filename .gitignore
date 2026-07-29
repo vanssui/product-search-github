@@ -5,6 +5,8 @@ dist/
 !.env.example
 .clasprc.json
 **/.clasprc.json
+.clasp.json
+**/.clasp.json
 backend-apps-script/.clasp.json
 github-migration-result.md
 *.pem

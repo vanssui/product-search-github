@@ -1,314 +1,519 @@
 import './styles/app.css';
 import { ApiClient, ApiError } from './api.js';
 import { createStore, saveEmployeeId, saveQuery } from './state.js';
-import { formatRoute, formatTime, matchesTask, splitWbStickers } from './utils.js';
+import { formatRoute, formatTime, splitWbStickers } from './utils.js';
 
 const api = new ApiClient(import.meta.env.VITE_BACKEND_URL);
-const store = createStore();
+const store = createStore({
+  blocks: [],
+  floors: [],
+  zone: '',
+  floor: '',
+  photoOnly: false,
+  myOnly: false,
+  filteredCount: 0,
+  totalActive: 0,
+  photoCount: 0,
+  page: 1,
+  pageCount: 1,
+  hasMore: false,
+  selectedToken: sessionStorage.getItem('product_search_selected_task') || '',
+  photoBusy: false
+});
+
 let refreshTimer = 0;
+let searchTimer = 0;
+let requestSequence = 0;
+const photoCache = new Map();
+const metrics = [];
+globalThis.__PRODUCT_SEARCH_METRICS__ = metrics;
 
 const app = document.querySelector('#app');
 app.innerHTML = `
-  <main class="shell">
-    <header class="topbar">
-      <div><p class="eyebrow">Тестовая GitHub-версия</p><h1>Поиск товаров</h1></div>
-      <span class="connection" id="connection">Онлайн</span>
-    </header>
-    <section class="searchPanel">
-      <input id="search" type="search" autocomplete="off" placeholder="ID товара, WB-стикер, MX или BOX" aria-label="Поиск заданий">
-      <div class="summary"><span id="count">0 заданий</span><span id="updated">ещё не обновлялось</span></div>
-    </section>
-    <div id="message"></div>
-    <section class="taskList" id="taskList" aria-live="polite"></section>
-  </main>
-  <nav class="bottomNav" aria-label="Основная навигация">
-    <button class="navButton" id="showAll" type="button">Все задания</button>
-    <button class="primary" id="refresh" type="button">Обновить</button>
-  </nav>
-  <div class="backdrop" id="backdrop" hidden>
-    <article class="sheet" role="dialog" aria-modal="true" aria-labelledby="taskTitle">
-      <header class="sheetHeader">
-        <div><p class="eyebrow" id="taskZone"></p><h2 id="taskTitle"></h2><div class="route" id="taskRoute"></div></div>
-        <button class="iconButton" id="closeSheet" type="button" aria-label="Закрыть">×</button>
-      </header>
-      <div class="chips" id="taskStickers"></div>
-      <div class="detailGrid" id="taskDetails"></div>
-      <label class="field">ID сотрудника
-        <input id="employeeId" maxlength="64" autocomplete="username" placeholder="Например E017">
-      </label>
-      <div id="sheetMessage"></div>
-      <div class="actions">
-        <button class="primary wide" id="takeTask" type="button">Взять задание</button>
-        <button class="secondary wide" id="releaseTask" type="button" hidden>Освободить задание</button>
-        <label class="secondary wide" for="photoInput" style="display:grid;place-items:center">Добавить фото</label>
-        <input id="photoInput" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" hidden>
-        <img class="photoPreview" id="photoPreview" alt="Предпросмотр фото" hidden>
-        <button class="successButton" id="foundTask" type="button">Найдено</button>
-        <button class="dangerButton" id="missingTask" type="button">Не найдено</button>
+  <div class="appShell">
+    <header class="appHeader">
+      <div>
+        <p class="brand">Поиск товаров</p>
+        <h1>Активные задания</h1>
       </div>
-    </article>
+      <div class="headerActions">
+        <span class="connection" id="connection">Подключение…</span>
+        <button class="employeeButton" id="employeeButton" type="button">Указать ID</button>
+        <button class="iconButton" id="refreshButton" type="button" aria-label="Обновить">↻</button>
+      </div>
+    </header>
+
+    <section class="filterPanel" aria-label="Фильтры заданий">
+      <label class="searchBox">
+        <span aria-hidden="true">⌕</span>
+        <input id="searchInput" type="search" autocomplete="off"
+          placeholder="WB-стикер, товар, MX или BOX">
+      </label>
+
+      <div class="blockGrid" id="blockGrid"></div>
+
+      <div class="quickFilters">
+        <button class="filterButton" id="myTasksButton" type="button">Мои задания</button>
+        <button class="filterButton" id="photoFilterButton" type="button">С фото</button>
+      </div>
+
+      <div class="floorSection">
+        <div class="sectionLabel">Этаж</div>
+        <div class="floorGrid" id="floorGrid"></div>
+      </div>
+    </section>
+
+    <section class="summaryBar">
+      <div><strong id="filteredMetric">0</strong><span>в фильтре</span></div>
+      <div><strong id="totalMetric">0</strong><span>в поиске</span></div>
+      <div><strong id="floorMetric">0</strong><span>этажей</span></div>
+      <div><strong id="photoMetric">0</strong><span>с фото</span></div>
+      <p id="updatedText">Загрузка данных…</p>
+    </section>
+
+    <div class="workspace">
+      <main class="catalogPane">
+        <div id="notice"></div>
+        <div class="catalogHeading">
+          <div>
+            <p class="sectionLabel" id="catalogEyebrow">Все блоки</p>
+            <h2 id="catalogTitle">Задания</h2>
+          </div>
+          <span class="readOnlyBadge">Только чтение</span>
+        </div>
+        <div class="taskList" id="taskList" aria-live="polite"></div>
+        <button class="loadMoreButton" id="loadMoreButton" type="button" hidden>
+          Показать ещё
+        </button>
+      </main>
+
+      <aside class="detailPane" id="detailPane" aria-label="Детали задания">
+        <div class="detailEmpty" id="detailEmpty">
+          <div class="emptyIcon">↗</div>
+          <h2>Выберите задание</h2>
+          <p>Карточка откроется здесь. На телефоне — отдельным удобным экраном.</p>
+        </div>
+        <article class="taskDetail" id="taskDetail" hidden>
+          <header class="detailHeader">
+            <div>
+              <p class="sectionLabel" id="detailSource"></p>
+              <h2 id="detailSticker"></h2>
+            </div>
+            <button class="iconButton" id="closeDetailButton" type="button" aria-label="Закрыть">×</button>
+          </header>
+          <h3 id="detailName"></h3>
+          <div class="detailBadges" id="detailBadges"></div>
+          <div class="mxHero">
+            <span>MX</span>
+            <strong id="detailMx"></strong>
+            <small id="detailRoute"></small>
+          </div>
+          <dl class="detailGrid" id="detailGrid"></dl>
+          <section class="photoPanel">
+            <div class="photoHeader">
+              <div><span>Фото задания</span><strong id="photoCountLabel">0</strong></div>
+              <span>Загружаются только по нажатию</span>
+            </div>
+            <div class="photoList" id="photoList"></div>
+          </section>
+          <div class="readOnlyNotice">
+            Данные подключены к production в безопасном режиме чтения.
+            Операции записи будут включены только после отдельной проверки.
+          </div>
+          <div class="actionGrid">
+            <button class="primaryAction" type="button" disabled>Взять</button>
+            <button type="button" disabled>Освободить</button>
+            <button type="button" disabled>Добавить фото</button>
+            <button class="successAction" type="button" disabled>Найдено</button>
+            <button class="dangerAction" type="button" disabled>Не найдено</button>
+            <button class="primaryAction wide" type="button" disabled>Завершить</button>
+          </div>
+        </article>
+      </aside>
+    </div>
+  </div>
+
+  <div class="detailBackdrop" id="detailBackdrop" hidden></div>
+
+  <div class="profileModal" id="profileModal" hidden>
+    <form class="profileCard" id="profileForm">
+      <p class="sectionLabel">Исполнитель</p>
+      <h2>Укажите ID</h2>
+      <p>ID нужен для фильтра «Мои задания» и будет использован после включения рабочих действий.</p>
+      <label>ID сотрудника
+        <input id="employeeInput" maxlength="64" autocomplete="username" placeholder="Например E017">
+      </label>
+      <div class="profileActions">
+        <button type="button" id="cancelProfileButton">Отмена</button>
+        <button class="primaryAction" type="submit">Сохранить</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="photoViewer" id="photoViewer" hidden>
+    <button class="photoViewerClose" id="photoViewerClose" type="button" aria-label="Закрыть">×</button>
+    <div class="photoViewerBody" id="photoViewerBody"></div>
   </div>
 `;
 
-const el = Object.fromEntries([
-  'connection','search','count','updated','message','taskList','refresh','showAll','backdrop',
-  'closeSheet','taskZone','taskTitle','taskRoute','taskStickers','taskDetails','employeeId',
-  'sheetMessage','takeTask','releaseTask','photoInput','photoPreview','foundTask','missingTask'
-].map((id) => [id, document.getElementById(id)]));
+const ids = [
+  'connection', 'employeeButton', 'refreshButton', 'searchInput', 'blockGrid',
+  'myTasksButton', 'photoFilterButton', 'floorGrid', 'filteredMetric',
+  'totalMetric', 'floorMetric', 'photoMetric', 'updatedText', 'notice',
+  'catalogEyebrow', 'catalogTitle', 'taskList', 'loadMoreButton', 'detailPane',
+  'detailEmpty', 'taskDetail', 'detailSource', 'detailSticker', 'detailName',
+  'detailBadges', 'detailMx', 'detailRoute', 'detailGrid', 'photoCountLabel',
+  'photoList', 'closeDetailButton', 'detailBackdrop', 'profileModal',
+  'profileForm', 'employeeInput', 'cancelProfileButton', 'photoViewer',
+  'photoViewerClose', 'photoViewerBody'
+];
+const el = Object.fromEntries(ids.map((id) => [id, document.getElementById(id)]));
 
-el.search.value = store.get().query;
-el.employeeId.value = store.get().employeeId;
-
-function setMessage(text = '', tone = '') {
-  el.message.innerHTML = text ? `<div class="notice ${tone}">${escapeHtml(text)}</div>` : '';
-}
-
-function setSheetMessage(text = '', tone = '') {
-  el.sheetMessage.innerHTML = text ? `<div class="notice ${tone}">${escapeHtml(text)}</div>` : '';
-}
+el.searchInput.value = store.get().query;
 
 function escapeHtml(value) {
-  return String(value ?? '').replace(/[&<>"']/g, (char) => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
-  })[char]);
+  return String(value ?? '').replace(/[&<>"']/g, (character) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#039;'
+  })[character]);
 }
 
-function filteredTasks(state) {
-  return state.tasks.filter((task) => matchesTask(task, state.query));
+function setNotice(text = '', tone = '') {
+  el.notice.innerHTML = text
+    ? `<div class="notice ${tone}">${escapeHtml(text)}</div>`
+    : '';
 }
 
-function render(state) {
-  el.connection.textContent = state.offline ? 'Нет связи' : 'Онлайн';
-  el.connection.classList.toggle('offline', state.offline);
-  el.refresh.disabled = state.loading || state.saving || state.offline;
-  el.updated.textContent = state.loading ? 'загрузка…' : `обновлено ${formatTime(state.generatedAt)}`;
-  const tasks = filteredTasks(state);
-  el.count.textContent = `${tasks.length} из ${state.tasks.length}`;
-
-  if (state.loading && !state.tasks.length) {
-    el.taskList.innerHTML = '<div class="empty"><div class="spinner" style="margin:0 auto 12px"></div>Загружаю задания…</div>';
-    return;
-  }
-  if (!tasks.length) {
-    el.taskList.innerHTML = `<div class="empty">${state.query ? 'Ничего не найдено. Проверьте ID или WB-стикер.' : 'Активных заданий нет.'}</div>`;
-    return;
-  }
-  el.taskList.innerHTML = tasks.map((task) => `
-    <button class="taskCard" type="button" data-key="${escapeHtml(task.taskToken)}">
-      <div class="cardTop"><span class="cardId">${escapeHtml(task.itemId || task.wbSticker || 'Без ID')}</span><span class="zone">${escapeHtml(task.zone || '—')}</span></div>
-      <div class="itemName">${escapeHtml(task.itemName || 'Без названия')}</div>
-      <div class="route">${escapeHtml(formatRoute(task))}</div>
-      <div class="chips">
-        ${splitWbStickers(task.wbSticker).map((value) => `<span class="chip">WB ${escapeHtml(value)}</span>`).join('')}
-        ${task.box ? `<span class="chip">BOX ${escapeHtml(task.box)}</span>` : ''}
-        ${task.photoCount ? `<span class="chip">Фото ${task.photoCount}</span>` : ''}
-      </div>
-    </button>
-  `).join('');
+function recordMetric(name, startedAt, extra = {}) {
+  const entry = {
+    name,
+    durationMs: Math.round((performance.now() - startedAt) * 10) / 10,
+    at: new Date().toISOString(),
+    ...extra
+  };
+  metrics.push(entry);
+  if (metrics.length > 100) metrics.shift();
+  return entry;
 }
 
-async function loadTasks({ silent = false } = {}) {
-  if (store.get().loading || store.get().saving || !navigator.onLine) return;
+function catalogParams(state, page) {
+  return {
+    zone: state.zone,
+    floor: state.floor,
+    query: state.query,
+    photoOnly: state.photoOnly,
+    myOnly: state.myOnly,
+    employeeId: state.employeeId,
+    page,
+    pageSize: 60
+  };
+}
+
+async function loadCatalog({ append = false, silent = false } = {}) {
+  const state = store.get();
+  if (state.loading || state.offline) return;
+  const sequence = ++requestSequence;
+  const page = append ? state.page + 1 : 1;
+  const startedAt = performance.now();
+
   store.set({ loading: true });
-  if (!silent) setMessage('');
+  if (!silent) setNotice('');
+
   try {
-    const data = await api.get('getTasks');
-    store.set({ tasks: data.tasks || [], generatedAt: data.generatedAt || new Date().toISOString(), loading: false });
+    const data = await api.get('getCatalog', catalogParams(state, page));
+    if (sequence !== requestSequence) return;
+    const tasks = append ? [...store.get().tasks, ...(data.tasks || [])] : (data.tasks || []);
+    store.set({
+      tasks,
+      blocks: data.blocks || [],
+      floors: data.floors || [],
+      filteredCount: data.filteredCount || 0,
+      totalActive: data.totalActive || 0,
+      photoCount: data.photoCount || 0,
+      generatedAt: data.generatedAt || new Date().toISOString(),
+      page: data.page || page,
+      pageCount: data.pageCount || 1,
+      hasMore: Boolean(data.hasMore),
+      loading: false
+    });
+    recordMetric(append ? 'catalog_next_page' : 'catalog_load', startedAt, {
+      serverGeneratedAt: data.generatedAt,
+      returned: (data.tasks || []).length,
+      filteredCount: data.filteredCount || 0
+    });
+    if (!append && store.get().selectedToken) {
+      restoreSelectedTask();
+    }
   } catch (error) {
+    if (sequence !== requestSequence) return;
     store.set({ loading: false });
-    setMessage(formatError(error), 'error');
+    setNotice(formatError(error), 'error');
+    recordMetric('catalog_error', startedAt, { code: error?.code || 'ERROR' });
   } finally {
     scheduleRefresh();
   }
 }
 
+async function restoreSelectedTask() {
+  const token = store.get().selectedToken;
+  if (!token) return;
+  const inPage = store.get().tasks.find((task) => task.taskToken === token);
+  if (inPage) {
+    selectTask(inPage, { persist: false });
+    return;
+  }
+  try {
+    const task = await api.get('getTask', { taskToken: token });
+    selectTask(task, { persist: false });
+  } catch {
+    clearSelection();
+  }
+}
+
 function scheduleRefresh() {
   clearTimeout(refreshTimer);
-  const delay = document.hidden ? 300000 : 150000;
   refreshTimer = window.setTimeout(() => {
-    if (!store.get().selectedTask && !store.get().saving) loadTasks({ silent: true });
-  }, delay);
+    if (!document.hidden && !store.get().selectedTask) {
+      loadCatalog({ silent: true });
+    }
+  }, document.hidden ? 300000 : 150000);
 }
 
-function selectTask(task) {
-  store.set({ selectedTask: task, claim: null });
-  el.taskZone.textContent = task.zone || task.sourceLabel || '';
-  el.taskTitle.textContent = task.itemName || task.itemId || 'Задание';
-  el.taskRoute.textContent = formatRoute(task);
-  el.taskStickers.innerHTML = splitWbStickers(task.wbSticker)
-    .map((value) => `<span class="chip">WB ${escapeHtml(value)}</span>`).join('');
-  el.taskDetails.innerHTML = [
-    ['ID товара', task.itemId],
-    ['MX', task.mx],
+function render(state) {
+  el.connection.textContent = state.offline
+    ? 'Нет связи'
+    : state.loading
+      ? 'Обновление…'
+      : 'Production • чтение';
+  el.connection.classList.toggle('offline', state.offline);
+  el.employeeButton.textContent = state.employeeId || 'Указать ID';
+  el.refreshButton.disabled = state.loading || state.offline;
+  el.searchInput.disabled = state.loading && !state.tasks.length;
+
+  renderBlocks(state);
+  renderFloors(state);
+  renderSummary(state);
+  renderTasks(state);
+  renderDetail(state);
+}
+
+function renderBlocks(state) {
+  const allCount = state.blocks.reduce((sum, block) => sum + block.count, 0);
+  const blocks = [{ id: '', label: 'Все', count: allCount }, ...state.blocks];
+  el.blockGrid.innerHTML = blocks.map((block) => `
+    <button class="blockButton ${state.zone === block.id ? 'active' : ''}"
+      data-zone="${escapeHtml(block.id)}" type="button">
+      <strong>${escapeHtml(block.label)}</strong>
+      <span>${block.count}</span>
+    </button>
+  `).join('');
+  el.myTasksButton.classList.toggle('active', state.myOnly);
+  el.photoFilterButton.classList.toggle('active', state.photoOnly);
+}
+
+function renderFloors(state) {
+  const allCount = state.floors.reduce((sum, floor) => sum + floor.count, 0);
+  const floors = [{ id: '', label: 'Все', count: allCount }, ...state.floors];
+  el.floorGrid.innerHTML = floors.map((floor) => `
+    <button class="floorButton ${state.floor === floor.id ? 'active' : ''}"
+      data-floor="${escapeHtml(floor.id)}" type="button">
+      <strong>${escapeHtml(floor.id ? (floor.label === 'Без этажа' ? floor.label : `Этаж ${floor.label}`) : 'Все')}</strong>
+      <span>${floor.count}</span>
+    </button>
+  `).join('');
+}
+
+function renderSummary(state) {
+  el.filteredMetric.textContent = state.filteredCount;
+  el.totalMetric.textContent = state.totalActive;
+  el.floorMetric.textContent = state.floors.length;
+  el.photoMetric.textContent = state.photoCount;
+  el.updatedText.textContent = state.loading
+    ? 'Получаю свежие данные…'
+    : `Обновлено ${formatTime(state.generatedAt)}`;
+  el.catalogEyebrow.textContent = state.zone || 'Все блоки';
+  el.catalogTitle.textContent = state.floor
+    ? `Задания • ${state.floor === 'Без этажа' ? state.floor : `этаж ${state.floor}`}`
+    : 'Задания по маршруту';
+}
+
+function renderTasks(state) {
+  if (state.loading && !state.tasks.length) {
+    el.taskList.innerHTML = Array.from({ length: 6 }, () => '<div class="taskSkeleton"></div>').join('');
+    el.loadMoreButton.hidden = true;
+    return;
+  }
+  if (!state.tasks.length) {
+    el.taskList.innerHTML = `
+      <div class="emptyState">
+        <h3>Заданий не найдено</h3>
+        <p>Измените блок, этаж или строку поиска.</p>
+      </div>`;
+    el.loadMoreButton.hidden = true;
+    return;
+  }
+
+  el.taskList.innerHTML = state.tasks.map((task, index) => {
+    const stickers = splitWbStickers(task.wbSticker);
+    const mainSticker = stickers[0] || task.wbSticker || '—';
+    return `
+      <button class="taskCard ${state.selectedToken === task.taskToken ? 'selected' : ''}"
+        data-task-token="${escapeHtml(task.taskToken)}" type="button">
+        <div class="cardHeader">
+          <div>
+            <span class="cardLabel">WB-стикер</span>
+            <strong class="wbSticker">${escapeHtml(mainSticker)}</strong>
+          </div>
+          <span class="zoneBadge">${escapeHtml(task.zone || '—')}</span>
+        </div>
+        <div class="cardMx">
+          <span>MX</span>
+          <strong>${escapeHtml(task.mx || '—')}</strong>
+        </div>
+        <h3>${escapeHtml(task.itemName || 'Без наименования')}</h3>
+        <div class="routeLine">${escapeHtml(formatRoute(task))}</div>
+        <div class="cardFacts">
+          ${task.itemId ? `<span>ID ${escapeHtml(task.itemId)}</span>` : ''}
+          ${task.box ? `<span>BOX ${escapeHtml(task.box)}</span>` : ''}
+          ${task.timeFilled ? `<span>${escapeHtml(task.timeFilled)}</span>` : ''}
+          <span>${escapeHtml(task.statusSearch || 'Поиск')}</span>
+          ${task.photoCount ? `<span class="photoFact">Фото ${task.photoCount}</span>` : ''}
+        </div>
+        <div class="routeIndex">Маршрут ${index + 1 + ((state.page - 1) * 0)} из ${state.filteredCount}</div>
+      </button>
+    `;
+  }).join('');
+
+  el.loadMoreButton.hidden = !state.hasMore;
+  el.loadMoreButton.disabled = state.loading;
+  el.loadMoreButton.textContent = state.loading ? 'Загрузка…' : 'Показать ещё';
+}
+
+function renderDetail(state) {
+  const task = state.selectedTask;
+  el.detailEmpty.hidden = Boolean(task);
+  el.taskDetail.hidden = !task;
+  el.detailBackdrop.hidden = !task || window.innerWidth >= 900;
+  document.documentElement.classList.toggle('detailOpen', Boolean(task));
+  if (!task) return;
+
+  el.detailSource.textContent = task.sourceLabel || task.zone || 'Задание';
+  el.detailSticker.textContent = splitWbStickers(task.wbSticker)[0] || task.wbSticker || '—';
+  el.detailName.textContent = task.itemName || 'Без наименования';
+  el.detailMx.textContent = task.mx || '—';
+  el.detailRoute.textContent = formatRoute(task);
+  el.detailBadges.innerHTML = [
+    task.zone && `<span class="zoneBadge">${escapeHtml(task.zone)}</span>`,
+    task.statusSearch && `<span>${escapeHtml(task.statusSearch)}</span>`,
+    task.itemStatus && `<span>${escapeHtml(task.itemStatus)}</span>`,
+    task.photoCount && `<span class="photoFact">Фото ${task.photoCount}</span>`
+  ].filter(Boolean).join('');
+
+  const details = [
+    ['WB-стикер', task.wbSticker],
+    ['Товар / ID', task.itemId],
     ['BOX', task.box],
-    ['Сборщик', task.pickerId],
-    ['Лист', task.sheetName],
-    ['Строка', task.rowNumber]
-  ].map(([label, value]) => `<div class="detail"><span>${label}</span><strong>${escapeHtml(value || '—')}</strong></div>`).join('');
-  el.employeeId.value = store.get().employeeId;
-  el.backdrop.hidden = false;
-  document.body.style.overflow = 'hidden';
-  updateActionState();
-  setSheetMessage('');
+    ['Этаж', task.floor],
+    ['Ряд', task.row],
+    ['Место', task.place],
+    ['Полка', task.shelf],
+    ['Ячейка', task.cell],
+    ['Время', task.timeFilled],
+    ['ID сотрудника', task.employeeId || 'Свободно'],
+    ['ID сборщика', task.pickerId],
+    ['Действие', task.action],
+    ['Комментарий', task.comment],
+    ['Дата выгрузки', task.createdAt]
+  ];
+  el.detailGrid.innerHTML = details.map(([label, value]) => `
+    <div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value || '—')}</dd></div>
+  `).join('');
+
+  el.photoCountLabel.textContent = task.photoCount || 0;
+  renderPhotos(task, state.photoBusy);
 }
 
-function closeTaskSheet() {
-  if (store.get().saving) return;
-  el.backdrop.hidden = true;
-  document.body.style.overflow = '';
-  el.photoPreview.hidden = true;
-  el.photoPreview.removeAttribute('src');
-  store.set({ selectedTask: null, claim: null });
-  scheduleRefresh();
-}
-
-function currentIdentity() {
-  const employeeId = el.employeeId.value.trim().toUpperCase();
-  if (!employeeId) {
-    setSheetMessage('Укажите ID сотрудника.', 'error');
-    el.employeeId.focus();
-    return null;
+function renderPhotos(task, busy) {
+  const ids = task.photoFileIds || [];
+  if (!ids.length) {
+    el.photoList.innerHTML = '<div class="photoEmpty">Фото пока не добавлено</div>';
+    return;
   }
-  saveEmployeeId(employeeId);
-  store.set({ employeeId });
-  return { employeeId, sessionId: store.get().sessionId };
+  el.photoList.innerHTML = ids.map((fileId, index) => {
+    const dataUrl = photoCache.get(fileId);
+    if (dataUrl) {
+      return `<button class="photoThumb" data-file-id="${escapeHtml(fileId)}" type="button">
+        <img src="${escapeHtml(dataUrl)}" alt="Фото ${index + 1}">
+      </button>`;
+    }
+    return `<button class="photoPlaceholder" data-file-id="${escapeHtml(fileId)}"
+      type="button" ${busy ? 'disabled' : ''}>Открыть фото ${index + 1}</button>`;
+  }).join('');
 }
 
-function taskPayload(extra = {}) {
+function selectTask(task, { persist = true } = {}) {
+  const startedAt = performance.now();
+  if (persist) sessionStorage.setItem('product_search_selected_task', task.taskToken);
+  store.set({ selectedTask: task, selectedToken: task.taskToken });
+  recordMetric('open_task', startedAt, { taskToken: task.taskToken.slice(0, 8) });
+}
+
+function clearSelection() {
+  sessionStorage.removeItem('product_search_selected_task');
+  store.set({ selectedTask: null, selectedToken: '' });
+}
+
+async function openPhoto(fileId) {
   const task = store.get().selectedTask;
-  return {
-    sheetName: task.sheetName,
-    rowNumber: task.rowNumber,
-    taskToken: task.taskToken,
-    ...currentIdentity(),
-    ...extra
-  };
-}
-
-function updateActionState() {
-  const { saving, claim } = store.get();
-  const owned = Boolean(claim?.owned);
-  el.takeTask.hidden = owned;
-  el.releaseTask.hidden = !owned;
-  [el.takeTask, el.releaseTask, el.photoInput, el.foundTask, el.missingTask].forEach((button) => {
-    button.disabled = saving || (button !== el.takeTask && !owned);
-  });
-}
-
-async function takeSelectedTask() {
-  const identity = currentIdentity();
-  if (!identity) return;
-  const task = store.get().selectedTask;
-  store.set({ saving: true });
-  updateActionState();
-  setSheetMessage('Фиксирую задание за вами…');
+  if (!task || store.get().photoBusy) return;
+  if (photoCache.has(fileId)) {
+    showPhoto(photoCache.get(fileId));
+    return;
+  }
+  store.set({ photoBusy: true });
+  const startedAt = performance.now();
   try {
-    const claim = await api.post('takeTask', {
-      ...identity,
-      sheetName: task.sheetName,
-      rowNumber: task.rowNumber,
+    const data = await api.get('getTaskPhoto', {
       taskToken: task.taskToken,
-      idempotencyKey: `take:${identity.sessionId}:${task.taskToken}`
-    }, {
-      onUncertain: () => setSheetMessage('Ответ задерживается. Проверяю, закреплено ли задание…')
+      fileId
     });
-    store.set({ claim: { ...claim, owned: true }, saving: false });
-    setSheetMessage(`Задание ваше до ${formatTime(claim.expiresAt)}.`, 'success');
+    const dataUrl = `data:${data.mimeType || 'image/jpeg'};base64,${data.base64}`;
+    photoCache.set(fileId, dataUrl);
+    store.set({ photoBusy: false });
+    recordMetric('photo_load', startedAt);
+    showPhoto(dataUrl);
   } catch (error) {
-    store.set({ saving: false });
-    setSheetMessage(formatError(error), 'error');
-  }
-  updateActionState();
-}
-
-async function releaseSelectedTask() {
-  const payload = taskPayload();
-  if (!payload.employeeId) return;
-  store.set({ saving: true });
-  updateActionState();
-  try {
-    await api.post('releaseTask', {
-      ...payload,
-      idempotencyKey: `release:${payload.sessionId}:${payload.taskToken}`
-    }, {
-      onUncertain: () => setSheetMessage('Ответ задерживается. Проверяю освобождение задания…')
-    });
-    store.set({ claim: null, saving: false });
-    setSheetMessage('Задание освобождено.', 'success');
-  } catch (error) {
-    store.set({ saving: false });
-    setSheetMessage(formatError(error), 'error');
-  }
-  updateActionState();
-}
-
-async function completeSelectedTask(newStatus) {
-  const payload = taskPayload({ newStatus });
-  if (!payload.employeeId || store.get().saving) return;
-  store.set({ saving: true });
-  updateActionState();
-  setSheetMessage('Сохраняю результат…');
-  try {
-    const result = await api.post('completeTask', {
-      ...payload,
-      idempotencyKey: `complete:${payload.sessionId}:${payload.taskToken}:${newStatus}`
-    }, {
-      onUncertain: () => setSheetMessage('Ответ задерживается. Проверяю сохранённый результат…')
-    });
-    store.update((state) => ({
-      saving: false,
-      tasks: state.tasks.filter((item) => item.taskToken !== payload.taskToken)
-    }));
-    setMessage(result.message || `Статус обновлён: ${newStatus}.`, 'success');
-    closeTaskSheet();
-    window.setTimeout(() => loadTasks({ silent: true }), 400);
-  } catch (error) {
-    store.set({ saving: false });
-    setSheetMessage(`${formatError(error)} Повторная отправка автоматически не выполнялась.`, 'error');
-    updateActionState();
+    store.set({ photoBusy: false });
+    setNotice(formatError(error), 'error');
   }
 }
 
-async function compressImage(file) {
-  if (!file.type.startsWith('image/')) throw new Error('Выберите изображение.');
-  const bitmap = await createImageBitmap(file);
-  const maxSide = 1600;
-  const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
-  const canvas = document.createElement('canvas');
-  canvas.width = Math.max(1, Math.round(bitmap.width * scale));
-  canvas.height = Math.max(1, Math.round(bitmap.height * scale));
-  canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-  bitmap.close();
-  return canvas.toDataURL('image/jpeg', .82);
+function showPhoto(dataUrl) {
+  el.photoViewerBody.innerHTML = `<img src="${escapeHtml(dataUrl)}" alt="Фото задания">`;
+  el.photoViewer.hidden = false;
 }
 
-async function uploadPhoto(file) {
-  const payload = taskPayload();
-  if (!payload.employeeId || !file || store.get().saving) return;
-  store.set({ saving: true });
-  updateActionState();
-  setSheetMessage('Сжимаю фотографию…');
-  try {
-    const dataUrl = await compressImage(file);
-    el.photoPreview.src = dataUrl;
-    el.photoPreview.hidden = false;
-    setSheetMessage('Загружаю фотографию…');
-    const result = await api.post('uploadTaskPhoto', {
-      ...payload,
-      fileName: file.name || 'task-photo.jpg',
-      mimeType: 'image/jpeg',
-      dataUrl,
-      idempotencyKey: `photo:${payload.sessionId}:${payload.taskToken}:${file.name}:${file.size}`
-    }, {
-      onUncertain: () => setSheetMessage('Ответ задерживается. Проверяю, сохранено ли фото…')
-    });
-    store.set({ saving: false });
-    setSheetMessage(`Фото загружено (${result.photoCount}).`, 'success');
-  } catch (error) {
-    store.set({ saving: false });
-    setSheetMessage(`${formatError(error)} Файл сохранён в форме и можно отправить снова вручную.`, 'error');
-  }
-  updateActionState();
+function closePhoto() {
+  el.photoViewer.hidden = true;
+  el.photoViewerBody.innerHTML = '';
+}
+
+function openProfile() {
+  el.employeeInput.value = store.get().employeeId || '';
+  el.profileModal.hidden = false;
+  window.setTimeout(() => el.employeeInput.focus(), 20);
+}
+
+function closeProfile() {
+  el.profileModal.hidden = true;
+}
+
+function updateFilters(patch) {
+  store.set({ ...patch, page: 1, tasks: [] });
+  loadCatalog();
 }
 
 function formatError(error) {
@@ -318,41 +523,72 @@ function formatError(error) {
   return error?.message || 'Неизвестная ошибка.';
 }
 
-el.taskList.addEventListener('click', (event) => {
-  const card = event.target.closest('[data-key]');
-  if (!card) return;
-  const task = store.get().tasks.find((item) => item.taskToken === card.dataset.key);
-  if (task) selectTask(task);
+el.blockGrid.addEventListener('click', (event) => {
+  const button = event.target.closest('[data-zone]');
+  if (!button) return;
+  updateFilters({ zone: button.dataset.zone || '', floor: '' });
 });
-el.search.addEventListener('input', () => {
-  const query = el.search.value;
+el.floorGrid.addEventListener('click', (event) => {
+  const button = event.target.closest('[data-floor]');
+  if (!button) return;
+  updateFilters({ floor: button.dataset.floor || '' });
+});
+el.myTasksButton.addEventListener('click', () => {
+  if (!store.get().employeeId) {
+    openProfile();
+    return;
+  }
+  updateFilters({ myOnly: !store.get().myOnly });
+});
+el.photoFilterButton.addEventListener('click', () => {
+  updateFilters({ photoOnly: !store.get().photoOnly });
+});
+el.searchInput.addEventListener('input', () => {
+  const query = el.searchInput.value;
   saveQuery(query);
   store.set({ query });
+  clearTimeout(searchTimer);
+  searchTimer = window.setTimeout(() => updateFilters({ query }), 350);
 });
-el.refresh.addEventListener('click', () => loadTasks());
-el.showAll.addEventListener('click', () => {
-  el.search.value = '';
-  saveQuery('');
-  store.set({ query: '' });
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+el.taskList.addEventListener('click', (event) => {
+  const card = event.target.closest('[data-task-token]');
+  if (!card) return;
+  const task = store.get().tasks.find((item) => item.taskToken === card.dataset.taskToken);
+  if (task) selectTask(task);
 });
-el.closeSheet.addEventListener('click', closeTaskSheet);
-el.backdrop.addEventListener('click', (event) => {
-  if (event.target === el.backdrop) closeTaskSheet();
+el.photoList.addEventListener('click', (event) => {
+  const button = event.target.closest('[data-file-id]');
+  if (button) openPhoto(button.dataset.fileId);
 });
-el.takeTask.addEventListener('click', takeSelectedTask);
-el.releaseTask.addEventListener('click', releaseSelectedTask);
-el.foundTask.addEventListener('click', () => completeSelectedTask('Найдено'));
-el.missingTask.addEventListener('click', () => completeSelectedTask('Не найдено'));
-el.photoInput.addEventListener('change', () => uploadPhoto(el.photoInput.files?.[0]));
-el.employeeId.addEventListener('change', () => {
-  const employeeId = el.employeeId.value.trim().toUpperCase();
+el.loadMoreButton.addEventListener('click', () => loadCatalog({ append: true }));
+el.refreshButton.addEventListener('click', () => loadCatalog());
+el.closeDetailButton.addEventListener('click', clearSelection);
+el.detailBackdrop.addEventListener('click', clearSelection);
+el.employeeButton.addEventListener('click', openProfile);
+el.cancelProfileButton.addEventListener('click', closeProfile);
+el.profileForm.addEventListener('submit', (event) => {
+  event.preventDefault();
+  const employeeId = el.employeeInput.value.trim().toUpperCase();
   saveEmployeeId(employeeId);
   store.set({ employeeId });
+  closeProfile();
+  if (store.get().myOnly) updateFilters({ employeeId });
 });
-window.addEventListener('online', () => { store.set({ offline: false }); loadTasks(); });
-window.addEventListener('offline', () => { store.set({ offline: true }); setMessage('Соединение потеряно. Введённые данные сохранены.', 'error'); });
+el.photoViewerClose.addEventListener('click', closePhoto);
+el.photoViewer.addEventListener('click', (event) => {
+  if (event.target === el.photoViewer) closePhoto();
+});
+window.addEventListener('online', () => {
+  store.set({ offline: false });
+  loadCatalog();
+});
+window.addEventListener('offline', () => {
+  store.set({ offline: true });
+  setNotice('Соединение потеряно. Фильтры и ID сохранены.', 'error');
+});
+window.addEventListener('resize', () => renderDetail(store.get()));
 document.addEventListener('visibilitychange', scheduleRefresh);
+
 store.subscribe(render);
 render(store.get());
-loadTasks();
+loadCatalog();

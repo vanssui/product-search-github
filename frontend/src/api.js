@@ -41,7 +41,7 @@ export class ApiClient {
 
   assertConfigured() {
     if (!/^https:\/\/script\.google\.com\/macros\/s\/[^/]+\/exec$/.test(this.baseUrl)) {
-      throw new ApiError('CONFIG_ERROR', 'URL тестового backend не настроен.');
+      throw new ApiError('CONFIG_ERROR', 'URL backend не настроен.');
     }
   }
 
