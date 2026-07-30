@@ -4,10 +4,6 @@ function uploadTaskPhotoApi_(payload) {
   var context = getWritableTaskContextByToken_(taskToken, {
     photoRequired: true
   });
-  if (!isActiveStatus_(getCell_(context.row, context.columns.statusSearch))) {
-    throw apiError_('TASK_CLOSED', 'Нельзя добавить фото к закрытому заданию.');
-  }
-  ensureClaimAllowsWrite_(taskToken, identity, false);
 
   var image = decodePhotoPayload_(payload);
   var folder = DriveApp.getFolderById(APP_CONFIG.photoFolderId);
@@ -32,6 +28,8 @@ function uploadTaskPhotoApi_(payload) {
       photoToken: buildPhotoToken_(taskToken, file.getId()),
       fileName: file.getName(),
       photoCount: nextIds.length,
+      message: 'Фото добавлено.',
+      employeeId: identity.employeeId,
       taskToken: taskToken
     };
   } catch (error) {

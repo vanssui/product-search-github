@@ -13,19 +13,9 @@ export function createProductSearchApi(baseUrl, options = {}) {
       client.get('getTaskPhoto', { taskToken, photoToken }),
     getOperationStatus: (writeAction, idempotencyKey) =>
       client.get('getOperationStatus', { writeAction, idempotencyKey }),
-    takeTask: (payload, requestOptions) =>
-      client.post('takeTask', payload, requestOptions),
-    releaseTask: (payload, requestOptions) =>
-      client.post('releaseTask', payload, requestOptions),
-    markFound: (payload, requestOptions) =>
-      client.post('markFound', payload, requestOptions),
-    markNotFound: (payload, requestOptions) =>
-      client.post('markNotFound', payload, requestOptions),
-    completeTask: (payload, requestOptions) =>
-      client.post('completeTask', payload, requestOptions),
+    updateTask: (payload, requestOptions) =>
+      client.post('updateTask', payload, requestOptions),
     uploadTaskPhoto: (payload, requestOptions) =>
-      client.post('uploadTaskPhoto', payload, requestOptions),
-    updateEmployee: (payload, requestOptions) =>
-      client.post('updateEmployee', payload, requestOptions)
+      client.post('uploadTaskPhoto', payload, requestOptions)
   });
 }

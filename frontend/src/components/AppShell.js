@@ -8,6 +8,8 @@ export function renderAppShell() {
         </div>
         <div class="headerActions">
           <span class="connection" id="connection">Подключение…</span>
+          <button class="employeeButton" id="reportButton" type="button">Отчёт</button>
+          <button class="employeeButton" id="idStatsButton" type="button">Статистика ID</button>
           <button class="employeeButton" id="employeeButton" type="button">Указать ID</button>
           <button class="iconButton" id="refreshButton" type="button" aria-label="Обновить">↻</button>
         </div>
@@ -46,7 +48,7 @@ export function renderAppShell() {
               <p class="sectionLabel" id="catalogEyebrow">Все блоки</p>
               <h2 id="catalogTitle">Задания</h2>
             </div>
-            <span class="readOnlyBadge">Только чтение</span>
+            <span class="readOnlyBadge" id="modeBadge">Проверка доступа…</span>
           </div>
           <div class="taskList" id="taskList" aria-live="polite"></div>
           <button class="loadMoreButton" id="loadMoreButton" type="button" hidden>
@@ -79,21 +81,21 @@ export function renderAppShell() {
             <section class="photoPanel">
               <div class="photoHeader">
                 <div><span>Фото задания</span><strong id="photoCountLabel">0</strong></div>
-                <span>Загружаются только по нажатию</span>
+                <div class="photoActions">
+                  <button type="button" id="pastePhotoButton">Вставить</button>
+                  <button type="button" id="galleryPhotoButton">Галерея</button>
+                  <button type="button" id="cameraPhotoButton">Камера</button>
+                </div>
               </div>
+              <input id="galleryPhotoInput" type="file" accept="image/*" hidden>
+              <input id="cameraPhotoInput" type="file" accept="image/*" capture="environment" hidden>
+              <div class="photoStatus" id="photoStatus"></div>
               <div class="photoList" id="photoList"></div>
             </section>
-            <div class="readOnlyNotice">
-              Данные подключены к production в безопасном режиме чтения.
-              Операции записи будут включены только после отдельной проверки.
-            </div>
+            <div class="detailMessage" id="detailMessage" aria-live="polite"></div>
             <div class="actionGrid">
-              <button class="primaryAction" type="button" disabled>Взять</button>
-              <button type="button" disabled>Освободить</button>
-              <button type="button" disabled>Добавить фото</button>
-              <button class="successAction" type="button" disabled>Найдено</button>
-              <button class="dangerAction" type="button" disabled>Не найдено</button>
-              <button class="primaryAction wide" type="button" disabled>Завершить</button>
+              <button class="successAction" id="foundButton" type="button">Найдено</button>
+              <button class="dangerAction" id="notFoundButton" type="button">Не найдено</button>
             </div>
           </article>
         </aside>
@@ -106,10 +108,11 @@ export function renderAppShell() {
       <form class="profileCard" id="profileForm">
         <p class="sectionLabel">Исполнитель</p>
         <h2>Укажите ID</h2>
-        <p>ID нужен для фильтра «Мои задания» и будущих рабочих действий.</p>
+        <p>ID сотрудника записывается при результате «Найдено» или «Не найдено».</p>
         <label>ID сотрудника
           <input id="employeeInput" maxlength="64" autocomplete="username" placeholder="Например E017">
         </label>
+        <div class="profileMessage" id="profileMessage"></div>
         <div class="profileActions">
           <button type="button" id="cancelProfileButton">Отмена</button>
           <button class="primaryAction" type="submit">Сохранить</button>
@@ -121,5 +124,60 @@ export function renderAppShell() {
       <button class="photoViewerClose" id="photoViewerClose" type="button" aria-label="Закрыть">×</button>
       <div class="photoViewerBody" id="photoViewerBody"></div>
     </div>
+
+    <div class="utilityModal" id="reportModal" hidden>
+      <section class="utilityCard" role="dialog" aria-modal="true" aria-labelledby="reportTitle">
+        <header>
+          <div>
+            <p class="sectionLabel">Помощник отчёта</p>
+            <h2 id="reportTitle">Отчёт по поиску</h2>
+          </div>
+          <button class="iconButton" id="reportCloseButton" type="button" aria-label="Закрыть">×</button>
+        </header>
+        <p>Вставьте строки из Google Sheets. Расчёт выполняется в браузере, как в исходном приложении.</p>
+        <textarea id="reportInput" rows="9" placeholder="Вставьте TSV-строки"></textarea>
+        <div class="utilityActions">
+          <button id="reportClearButton" type="button">Очистить</button>
+          <button id="reportCopyButton" type="button">Копировать</button>
+          <button class="primaryAction" id="reportCalculateButton" type="button">Посчитать</button>
+        </div>
+        <div class="utilityMessage" id="reportMessage"></div>
+        <pre class="utilityOutput" id="reportOutput"></pre>
+      </section>
+    </div>
+
+    <div class="utilityModal" id="idStatsModal" hidden>
+      <section class="utilityCard" role="dialog" aria-modal="true" aria-labelledby="idStatsTitle">
+        <header>
+          <div>
+            <p class="sectionLabel">Статистика ID</p>
+            <h2 id="idStatsTitle">Повторения сотрудников</h2>
+          </div>
+          <button class="iconButton" id="idStatsCloseButton" type="button" aria-label="Закрыть">×</button>
+        </header>
+        <div class="modeSwitch" id="idStatsModes">
+          <button class="active" data-id-mode="all" type="button">Все ID</button>
+          <button data-id-mode="found" type="button">Только найдено</button>
+          <button data-id-mode="missing" type="button">Только не найдено</button>
+        </div>
+        <textarea id="idStatsInput" rows="9" placeholder="Вставьте ID или строки таблицы"></textarea>
+        <div class="utilityActions">
+          <button id="idStatsClearButton" type="button">Очистить</button>
+          <button id="idStatsCopyButton" type="button">Копировать</button>
+          <button class="primaryAction" id="idStatsCalculateButton" type="button">Посчитать</button>
+        </div>
+        <div class="utilityMessage" id="idStatsMessage"></div>
+        <div class="idStatsSummary" id="idStatsSummary"></div>
+        <div class="idStatsOutput" id="idStatsOutput"></div>
+      </section>
+    </div>
+
+    <div class="loadingOverlay" id="loadingOverlay" hidden role="status" aria-live="polite">
+      <div class="loadingBox">
+        <span class="loadingSpinner" aria-hidden="true"></span>
+        <strong id="loadingText">Загрузка…</strong>
+      </div>
+    </div>
+    <div class="toastStack" id="toastStack" aria-live="polite"></div>
   `;
 }

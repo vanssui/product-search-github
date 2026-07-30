@@ -13,28 +13,28 @@ write fixture. It does not mean production write activation is approved.
 | Floors | explicit columns, then MX | same | confirmed | — |
 | Route ordering | zone/location order | same | confirmed | — |
 | Search WB/product/MX/BOX | client search | local search on API DTO | confirmed | — |
-| Search item ID | not explicit | supported | intentional improvement | document |
+| Search item ID | not included | not included | confirmed | — |
 | My tasks | employee ID equality | same | implemented | real employee smoke |
 | Photo filter | row has photo IDs | `hasPhoto` DTO | confirmed | — |
 | Card/detail fields | vNext fields | same business fields, larger UI | confirmed | continuing visual QA |
 | Storage abstraction | HTML knows returned row object | opaque DTO/tokens | improved | — |
 | Photo list/read | Drive IDs then base64 | opaque token, lazy base64 | confirmed | — |
 | Refresh | direct getTasks | cached + explicit fresh | confirmed | — |
-| Take/release | absent | claim TTL/owner lock | isolated E2E only | owner decision |
-| Second session | first completion wins | claim lock + first completion wins | isolated E2E only | production pilot |
-| Found | `updateTask` | `markFound`/completion | code + isolated E2E | production pilot |
-| Not found | `updateTask` | `markNotFound`/completion | code + unit tests | production pilot |
+| Take/release | absent | absent | confirmed | — |
+| Second session | first completion wins | global lock + first completion wins | unit confirmed | production pilot |
+| Found | `updateTask` | `updateTask("Найдено")` | unit confirmed | production pilot |
+| Not found | `updateTask` | `updateTask("Не найдено")` | unit confirmed | production pilot |
 | Duplicate write | first status reread | idempotency + status reread | isolated E2E/unit | production pilot |
 | Lost response | failure callback | GET status, no second POST | unit confirmed | production pilot |
 | Upload photo | Drive + last six IDs | same rule + rollback on row failure | isolated E2E | production pilot |
-| Reports | pasted TSV modal | absent | not matched | implement after write parity |
-| ID statistics | pasted TSV modal | API aggregates only | partial | define desired UX |
+| Reports | pasted TSV modal | same local parser/modal | unit + build | browser E2E |
+| ID statistics | pasted TSV modal | same local parser/ranking modal | unit + build | browser E2E |
 | Phone 390 px | vNext mobile | mobile-first detail surface | previously confirmed | recheck every release |
 
 ## Automated checks
 
-- 19 tests currently cover feature gates, readonly override, idempotency,
-  pending-operation behavior, stale closed task, two-session claim ownership,
+- 21 tests currently cover feature gates, readonly override, idempotency,
+  pending-operation behavior, first-write-wins,
   API action allow-list, hidden storage identifiers, timeout confirmation,
   filters, route formatting and search.
 - Production Vite build and Apps Script syntax checks pass.

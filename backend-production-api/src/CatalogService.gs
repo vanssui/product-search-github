@@ -118,7 +118,7 @@ function getTaskSnapshot_() {
   if (cached) return cached;
 
   var lock = LockService.getScriptLock();
-  var hasLock = lock.tryLock(45000);
+  var hasLock = lock.tryLock(APP_CONFIG.snapshotLockTimeoutMs);
   if (!hasLock) {
     cached = readSnapshotCache_();
     if (cached) return cached;

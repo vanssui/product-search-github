@@ -63,23 +63,22 @@ and photo tokens.
 
 The write services are implemented but disabled:
 
-- take/release claim;
-- found/not-found/completion;
+- updateTask with found/not-found;
 - photo upload;
 - employee identity normalization;
 - idempotency and GET operation confirmation.
 
 Production deployment reports all write capabilities false and rejects a POST
-with `READ_ONLY`. Its manifest has only readonly OAuth scopes.
+with `READ_ONLY`.
 
 ## Known functional gaps
 
 | Scenario | V12.06 | GitHub/API | State |
 |---|---|---|---|
 | Read catalog and cards | production | production | parity confirmed |
-| Search/item ID | item ID not explicit | item ID included | intentional extension |
-| Reports | local pasted TSV parser | absent | not yet migrated |
-| ID statistics | local pasted TSV parser | API aggregates exist, pasted workflow absent | partial |
+| Search/item ID | item ID not searched | item ID not searched | parity |
+| Reports | local pasted TSV parser | same local parser/modal | implemented |
+| ID statistics | local pasted TSV parser | same local parser/modal | implemented |
 | Completion | first-write-wins | implemented, disabled | needs approved one-task pilot |
 | Photo upload | Drive + row reference | implemented, disabled | needs approved one-task pilot |
-| take/release claim | absent | implemented, disabled | optional enhancement decision |
+| take/release claim | absent | absent | parity |

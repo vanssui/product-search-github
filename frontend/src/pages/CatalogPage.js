@@ -11,6 +11,14 @@ import { renderTaskCards } from '../components/TaskCard.js';
 import { buildTaskDetailView } from '../components/TaskDetail.js';
 import { escapeHtml } from '../ui/html.js';
 import { formatTime } from '../utils/tasks.js';
+import {
+  buildIdStats,
+  buildReportStats,
+  buildReportText,
+  extractIdsForStats,
+  parseReportRows,
+  pluralTimes
+} from '../utils/report.js';
 import '../types/contracts.js';
 
 const api = createProductSearchApi(APP_CONFIG.backendUrl);
@@ -20,6 +28,8 @@ const store = createCatalogStore();
 let refreshTimer = 0;
 let searchTimer = 0;
 let requestSequence = 0;
+let profileRequired = false;
+let idStatsMode = 'all';
 const photoCache = new Map();
 const metrics = [];
 globalThis.__PRODUCT_SEARCH_METRICS__ = metrics;
@@ -32,15 +42,24 @@ export function mountCatalogPage(app = document.querySelector('#app')) {
 
 function startCatalogPage(app) {
 const ids = [
-  'connection', 'employeeButton', 'refreshButton', 'searchInput', 'blockGrid',
+  'connection', 'reportButton', 'idStatsButton', 'employeeButton', 'refreshButton',
+  'searchInput', 'blockGrid',
   'myTasksButton', 'photoFilterButton', 'floorGrid', 'filteredMetric',
   'totalMetric', 'floorMetric', 'photoMetric', 'updatedText', 'notice',
-  'catalogEyebrow', 'catalogTitle', 'taskList', 'loadMoreButton', 'detailPane',
+  'catalogEyebrow', 'catalogTitle', 'modeBadge', 'taskList', 'loadMoreButton', 'detailPane',
   'detailEmpty', 'taskDetail', 'detailSource', 'detailSticker', 'detailName',
   'detailBadges', 'detailMx', 'detailRoute', 'detailGrid', 'photoCountLabel',
-  'photoList', 'closeDetailButton', 'detailBackdrop', 'profileModal',
-  'profileForm', 'employeeInput', 'cancelProfileButton', 'photoViewer',
-  'photoViewerClose', 'photoViewerBody'
+  'pastePhotoButton', 'galleryPhotoButton', 'cameraPhotoButton', 'galleryPhotoInput',
+  'cameraPhotoInput', 'photoStatus', 'photoList', 'detailMessage', 'foundButton',
+  'notFoundButton', 'closeDetailButton', 'detailBackdrop', 'profileModal',
+  'profileForm', 'employeeInput', 'profileMessage', 'cancelProfileButton',
+  'photoViewer', 'photoViewerClose', 'photoViewerBody', 'reportModal',
+  'reportTitle', 'reportCloseButton', 'reportInput', 'reportClearButton',
+  'reportCopyButton', 'reportCalculateButton', 'reportMessage', 'reportOutput',
+  'idStatsModal', 'idStatsTitle', 'idStatsCloseButton', 'idStatsModes',
+  'idStatsInput', 'idStatsClearButton', 'idStatsCopyButton',
+  'idStatsCalculateButton', 'idStatsMessage', 'idStatsSummary',
+  'idStatsOutput', 'loadingOverlay', 'loadingText', 'toastStack'
 ];
 const el = Object.fromEntries(ids.map((id) => [id, app.ownerDocument.getElementById(id)]));
 
@@ -50,6 +69,51 @@ function setNotice(text = '', tone = '') {
   el.notice.innerHTML = text
     ? `<div class="notice ${tone}">${escapeHtml(text)}</div>`
     : '';
+}
+
+function showLoading(text = 'Загрузка…') {
+  el.loadingText.textContent = text;
+  el.loadingOverlay.hidden = false;
+}
+
+function hideLoading() {
+  el.loadingOverlay.hidden = true;
+}
+
+function showToast(text, tone = '') {
+  if (!text) return;
+  const toast = document.createElement('div');
+  toast.className = `toast ${tone}`.trim();
+  toast.textContent = text;
+  el.toastStack.appendChild(toast);
+  window.setTimeout(() => toast.remove(), 3600);
+}
+
+function newIdempotencyKey(action, taskToken) {
+  const unique = globalThis.crypto?.randomUUID
+    ? globalThis.crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return `${action}:${String(taskToken || '').slice(0, 12)}:${unique}`;
+}
+
+async function loadCapabilities() {
+  try {
+    const data = await api.getCapabilities();
+    store.set({
+      capabilities: {
+        updateTask: Boolean(data?.write?.updateTask),
+        uploadTaskPhoto: Boolean(data?.write?.uploadTaskPhoto)
+      }
+    });
+  } catch (error) {
+    store.set({
+      capabilities: {
+        updateTask: false,
+        uploadTaskPhoto: false
+      }
+    });
+    setNotice(formatError(error), 'error');
+  }
 }
 
 function recordMetric(name, startedAt, extra = {}) {
@@ -80,7 +144,7 @@ async function loadCatalog({
   fresh = false
 } = {}) {
   const state = store.get();
-  if (state.loading || state.offline) return;
+  if (state.offline || (append && state.loading)) return;
   if (append && state.catalogComplete) {
     applyLocalCatalog(
       { visibleLimit: state.visibleLimit + PAGE_SIZE },
@@ -192,13 +256,39 @@ function scheduleRefresh() {
 function render(state) {
   el.connection.textContent = state.offline
     ? 'Нет связи'
+    : state.saving
+      ? 'Сохраняю результат…'
+      : state.uploadBusy
+        ? 'Загружаю фото…'
     : state.loading
       ? 'Обновление…'
-      : 'Production • чтение';
+      : state.capabilities.updateTask
+        ? 'Production • рабочий режим'
+        : 'Production • чтение';
   el.connection.classList.toggle('offline', state.offline);
   el.employeeButton.textContent = state.employeeId || 'Указать ID';
-  el.refreshButton.disabled = state.loading || state.offline;
+  el.refreshButton.disabled =
+    state.loading || state.saving || state.uploadBusy || state.offline;
   el.searchInput.disabled = state.loading && !state.tasks.length;
+  el.modeBadge.textContent = state.capabilities.updateTask
+    ? 'Рабочий режим'
+    : 'Только чтение';
+  el.foundButton.disabled =
+    !state.selectedTask ||
+    !state.capabilities.updateTask ||
+    state.saving ||
+    state.uploadBusy ||
+    state.offline;
+  el.notFoundButton.disabled = el.foundButton.disabled;
+  const photoDisabled =
+    !state.selectedTask ||
+    !state.capabilities.uploadTaskPhoto ||
+    state.saving ||
+    state.uploadBusy ||
+    state.offline;
+  el.pastePhotoButton.disabled = photoDisabled;
+  el.galleryPhotoButton.disabled = photoDisabled;
+  el.cameraPhotoButton.disabled = photoDisabled;
 
   renderBlocks(state);
   renderFloors(state);
@@ -274,6 +364,8 @@ function renderDetail(state) {
 
   el.photoCountLabel.textContent = task.photoCount || 0;
   renderPhotos(task, state.selectedPhotos, state.photosLoading, state.photoBusy);
+  el.foundButton.textContent = state.saving ? 'Сохраняю…' : 'Найдено';
+  el.notFoundButton.textContent = state.saving ? 'Сохраняю…' : 'Не найдено';
 }
 
 function renderPhotos(task, photos, loading, busy) {
@@ -307,6 +399,9 @@ function selectTask(task, { persist = true } = {}) {
     selectedPhotos: [],
     photosLoading: Boolean(task.photoCount)
   });
+  el.detailMessage.textContent = '';
+  el.detailMessage.className = 'detailMessage';
+  el.photoStatus.textContent = '';
   recordMetric('open_task', startedAt, { taskToken: task.taskToken.slice(0, 8) });
   if (task.photoCount) loadTaskPhotos(task);
 }
@@ -368,14 +463,305 @@ function closePhoto() {
   el.photoViewerBody.innerHTML = '';
 }
 
-function openProfile() {
+function openProfile({ required = false } = {}) {
+  profileRequired = required;
   el.employeeInput.value = store.get().employeeId || '';
+  el.profileMessage.textContent = required
+    ? 'Без ID нельзя открыть рабочий каталог.'
+    : '';
+  el.profileMessage.className = 'profileMessage';
+  el.cancelProfileButton.hidden = required;
   el.profileModal.hidden = false;
   window.setTimeout(() => el.employeeInput.focus(), 20);
 }
 
 function closeProfile() {
+  if (profileRequired && !store.get().employeeId) return;
+  profileRequired = false;
   el.profileModal.hidden = true;
+}
+
+function selectFirstVisibleTask() {
+  const first = store.get().tasks[0];
+  if (first) selectTask(first);
+  else clearSelection();
+}
+
+function removeClosedTask(taskToken) {
+  const state = store.get();
+  if (state.catalogComplete) {
+    store.set({
+      allTasks: state.allTasks.filter((task) => task.taskToken !== taskToken)
+    });
+    applyLocalCatalog({}, { resetLimit: false });
+  } else {
+    store.set({
+      tasks: state.tasks.filter((task) => task.taskToken !== taskToken),
+      filteredCount: Math.max(0, state.filteredCount - 1),
+      totalActive: Math.max(0, state.totalActive - 1)
+    });
+  }
+  selectFirstVisibleTask();
+}
+
+async function closeTask(newStatus) {
+  const state = store.get();
+  const task = state.selectedTask;
+  if (!task || state.saving) return;
+  if (!state.employeeId) {
+    openProfile({ required: true });
+    return;
+  }
+  if (!state.capabilities.updateTask) {
+    const message = 'Запись результата пока не включена на backend.';
+    el.detailMessage.textContent = message;
+    el.detailMessage.className = 'detailMessage error';
+    showToast(message, 'error');
+    return;
+  }
+
+  const startedAt = performance.now();
+  store.set({ saving: true });
+  el.detailMessage.textContent = '';
+  el.detailMessage.className = 'detailMessage';
+  showLoading(`Сохраняю «${newStatus}»…`);
+  try {
+    const result = await api.updateTask({
+      taskToken: task.taskToken,
+      newStatus,
+      employeeId: state.employeeId,
+      sessionId: state.sessionId,
+      idempotencyKey: newIdempotencyKey('updateTask', task.taskToken)
+    }, {
+      onUncertain: () => {
+        showLoading('Ответ задерживается. Проверяю результат…');
+        el.detailMessage.textContent =
+          'Сервер уже мог сохранить результат. Проверяю операцию без повторной записи…';
+      }
+    });
+    store.set({ saving: false });
+    hideLoading();
+    const message = result?.message || `Статус обновлён: ${newStatus}.`;
+    removeClosedTask(task.taskToken);
+    showToast(message, 'success');
+    recordMetric('update_task', startedAt, {
+      status: newStatus,
+      alreadyClosed: Boolean(result?.alreadyClosed)
+    });
+    loadCatalog({ silent: true, fresh: true });
+  } catch (error) {
+    store.set({ saving: false });
+    hideLoading();
+    const message = formatError(error);
+    el.detailMessage.textContent = message;
+    el.detailMessage.className = 'detailMessage error';
+    showToast(message, 'error');
+    recordMetric('update_task_error', startedAt, {
+      status: newStatus,
+      code: error?.code || 'ERROR'
+    });
+  }
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(new Error('Не удалось прочитать изображение.'));
+    reader.readAsDataURL(file);
+  });
+}
+
+function loadImage(dataUrl) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error('Не удалось открыть изображение.'));
+    image.src = dataUrl;
+  });
+}
+
+async function compressImage(file) {
+  const image = await loadImage(await readFileAsDataUrl(file));
+  const maxSide = 1600;
+  const scale = Math.min(1, maxSide / Math.max(image.naturalWidth, image.naturalHeight));
+  const width = Math.max(1, Math.round(image.naturalWidth * scale));
+  const height = Math.max(1, Math.round(image.naturalHeight * scale));
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  canvas.getContext('2d').drawImage(image, 0, 0, width, height);
+  return canvas.toDataURL('image/jpeg', 0.78);
+}
+
+async function uploadPhoto(file) {
+  const state = store.get();
+  const task = state.selectedTask;
+  if (!file || !task || state.uploadBusy) return;
+  if (!file.type?.startsWith('image/')) {
+    showToast('Выберите изображение.', 'error');
+    return;
+  }
+  if (!state.employeeId) {
+    openProfile({ required: true });
+    return;
+  }
+  if (!state.capabilities.uploadTaskPhoto) {
+    showToast('Загрузка фото пока не включена на backend.', 'error');
+    return;
+  }
+
+  const startedAt = performance.now();
+  store.set({ uploadBusy: true });
+  el.photoStatus.textContent = 'Подготавливаю изображение…';
+  showLoading('Подготавливаю изображение…');
+  try {
+    const dataUrl = await compressImage(file);
+    el.photoStatus.textContent = 'Загружаю фото…';
+    showLoading('Загружаю фото…');
+    const result = await api.uploadTaskPhoto({
+      taskToken: task.taskToken,
+      employeeId: state.employeeId,
+      sessionId: state.sessionId,
+      idempotencyKey: newIdempotencyKey('uploadTaskPhoto', task.taskToken),
+      dataUrl,
+      fileName: file.name || `task-${Date.now()}.jpg`,
+      mimeType: 'image/jpeg'
+    }, {
+      onUncertain: () => {
+        el.photoStatus.textContent = 'Ответ задерживается. Проверяю результат…';
+        showLoading('Проверяю результат загрузки…');
+      }
+    });
+    const freshTask = await api.getTask(task.taskToken);
+    store.set({ uploadBusy: false });
+    hideLoading();
+    selectTask(freshTask, { persist: false });
+    showToast(result?.message || 'Фото загружено.', 'success');
+    recordMetric('photo_upload', startedAt);
+    loadCatalog({ silent: true, fresh: true });
+  } catch (error) {
+    store.set({ uploadBusy: false });
+    hideLoading();
+    const message = formatError(error);
+    el.photoStatus.textContent = message;
+    showToast(message, 'error');
+    recordMetric('photo_upload_error', startedAt, {
+      code: error?.code || 'ERROR'
+    });
+  } finally {
+    el.galleryPhotoInput.value = '';
+    el.cameraPhotoInput.value = '';
+  }
+}
+
+async function pastePhotoFromClipboard() {
+  try {
+    if (!navigator.clipboard?.read) {
+      throw new Error('Вставьте изображение сочетанием клавиш Ctrl/Cmd+V.');
+    }
+    const items = await navigator.clipboard.read();
+    for (const item of items) {
+      const imageType = item.types.find((type) => type.startsWith('image/'));
+      if (!imageType) continue;
+      const blob = await item.getType(imageType);
+      await uploadPhoto(new File([blob], `clipboard-${Date.now()}.png`, {
+        type: imageType
+      }));
+      return;
+    }
+    throw new Error('В буфере обмена нет изображения.');
+  } catch (error) {
+    showToast(error?.message || 'Не удалось вставить изображение.', 'error');
+  }
+}
+
+function handleDocumentPaste(event) {
+  if (!store.get().selectedTask || store.get().uploadBusy) return;
+  const item = [...(event.clipboardData?.items || [])]
+    .find((entry) => entry.type.startsWith('image/'));
+  const file = item?.getAsFile();
+  if (file) {
+    event.preventDefault();
+    uploadPhoto(file);
+  }
+}
+
+function openUtilityModal(modal) {
+  if (modal === el.reportModal) {
+    el.reportTitle.textContent = `Отчёт ${store.get().zone || 'выбранному блоку'}`;
+  }
+  modal.hidden = false;
+  document.documentElement.classList.add('utilityOpen');
+  const input = modal.querySelector('textarea');
+  window.setTimeout(() => input?.focus(), 40);
+}
+
+function closeUtilityModal(modal) {
+  modal.hidden = true;
+  if (el.reportModal.hidden && el.idStatsModal.hidden) {
+    document.documentElement.classList.remove('utilityOpen');
+  }
+}
+
+async function copyText(text) {
+  const value = String(text || '');
+  if (!value) throw new Error('Нет данных для копирования.');
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(value);
+    return;
+  }
+  const textarea = document.createElement('textarea');
+  textarea.value = value;
+  textarea.style.position = 'fixed';
+  textarea.style.opacity = '0';
+  document.body.appendChild(textarea);
+  textarea.select();
+  const copied = document.execCommand('copy');
+  textarea.remove();
+  if (!copied) throw new Error('Не удалось скопировать результат.');
+}
+
+function calculateReport() {
+  const rows = parseReportRows(el.reportInput.value);
+  if (!rows.length) {
+    el.reportMessage.textContent = 'Вставьте строки из таблицы.';
+    el.reportMessage.className = 'utilityMessage error';
+    el.reportOutput.textContent = '';
+    return;
+  }
+  el.reportOutput.textContent = buildReportText(buildReportStats(rows));
+  el.reportMessage.textContent = `Отчёт посчитан: ${rows.length} строк.`;
+  el.reportMessage.className = 'utilityMessage success';
+}
+
+function calculateIdStats() {
+  const ids = extractIdsForStats(el.idStatsInput.value, idStatsMode);
+  if (!ids.length) {
+    el.idStatsMessage.textContent =
+      'Не нашёл ID 5–8 цифр. Проверьте вставленный список.';
+    el.idStatsMessage.className = 'utilityMessage error';
+    el.idStatsSummary.innerHTML = '';
+    el.idStatsOutput.innerHTML = '';
+    el.idStatsOutput.dataset.copyText = '';
+    return;
+  }
+  const stats = buildIdStats(ids);
+  el.idStatsSummary.innerHTML =
+    `<div><b>${ids.length}</b><span>строк</span></div>` +
+    `<div><b>${stats.unique}</b><span>уникальных ID</span></div>`;
+  const max = stats.rows[0]?.count || 1;
+  el.idStatsOutput.innerHTML = stats.rows.map((row) => {
+    const width = Math.max(6, Math.round((row.count / max) * 100));
+    return `<div class="idStatsRow">` +
+      `<div class="idStatsRowTop"><strong>${escapeHtml(row.id)}</strong>` +
+      `<span>${row.count} ${pluralTimes(row.count)}</span></div>` +
+      `<div class="idStatsBar"><i style="width:${width}%"></i></div></div>`;
+  }).join('');
+  el.idStatsMessage.textContent =
+    `Посчитано ID: ${ids.length}, уникальных: ${stats.unique}.`;
+  el.idStatsMessage.className = 'utilityMessage success';
+  el.idStatsOutput.dataset.copyText = stats.text;
 }
 
 function updateFilters(patch) {
@@ -421,11 +807,20 @@ el.searchInput.addEventListener('input', () => {
   clearTimeout(searchTimer);
   searchTimer = window.setTimeout(() => updateFilters({ query }), 350);
 });
-el.taskList.addEventListener('click', (event) => {
+el.taskList.addEventListener('click', async (event) => {
   const card = event.target.closest('[data-task-token]');
   if (!card) return;
-  const task = store.get().tasks.find((item) => item.taskToken === card.dataset.taskToken);
-  if (task) selectTask(task);
+  const token = card.dataset.taskToken;
+  const task = store.get().tasks.find((item) => item.taskToken === token);
+  if (task) {
+    selectTask(task);
+    return;
+  }
+  try {
+    selectTask(await api.getTask(token));
+  } catch (error) {
+    setNotice(formatError(error), 'error');
+  }
 });
 el.photoList.addEventListener('click', (event) => {
   const button = event.target.closest('[data-photo-token]');
@@ -435,23 +830,97 @@ el.loadMoreButton.addEventListener('click', () => loadCatalog({ append: true }))
 el.refreshButton.addEventListener('click', () => loadCatalog({ fresh: true }));
 el.closeDetailButton.addEventListener('click', clearSelection);
 el.detailBackdrop.addEventListener('click', clearSelection);
-el.employeeButton.addEventListener('click', openProfile);
+el.employeeButton.addEventListener('click', () => openProfile());
 el.cancelProfileButton.addEventListener('click', closeProfile);
 el.profileForm.addEventListener('submit', (event) => {
   event.preventDefault();
   const employeeId = el.employeeInput.value.trim().toUpperCase();
+  if (!employeeId) {
+    el.profileMessage.textContent = 'Введите ID сотрудника.';
+    el.profileMessage.className = 'profileMessage error';
+    return;
+  }
+  const firstLogin = !store.get().employeeId;
   saveEmployeeId(employeeId);
   store.set({ employeeId });
   closeProfile();
-  if (store.get().myOnly) updateFilters({ employeeId });
+  if (firstLogin) {
+    loadCapabilities();
+    loadCatalog();
+  } else if (store.get().myOnly) {
+    updateFilters({ employeeId });
+  }
 });
+el.foundButton.addEventListener('click', () => closeTask('Найдено'));
+el.notFoundButton.addEventListener('click', () => closeTask('Не найдено'));
+el.pastePhotoButton.addEventListener('click', pastePhotoFromClipboard);
+el.galleryPhotoButton.addEventListener('click', () => el.galleryPhotoInput.click());
+el.cameraPhotoButton.addEventListener('click', () => el.cameraPhotoInput.click());
+el.galleryPhotoInput.addEventListener('change', () => uploadPhoto(el.galleryPhotoInput.files?.[0]));
+el.cameraPhotoInput.addEventListener('change', () => uploadPhoto(el.cameraPhotoInput.files?.[0]));
+document.addEventListener('paste', handleDocumentPaste);
 el.photoViewerClose.addEventListener('click', closePhoto);
 el.photoViewer.addEventListener('click', (event) => {
   if (event.target === el.photoViewer) closePhoto();
 });
+el.reportButton.addEventListener('click', () => openUtilityModal(el.reportModal));
+el.reportCloseButton.addEventListener('click', () => closeUtilityModal(el.reportModal));
+el.reportModal.addEventListener('click', (event) => {
+  if (event.target === el.reportModal) closeUtilityModal(el.reportModal);
+});
+el.reportCalculateButton.addEventListener('click', calculateReport);
+el.reportClearButton.addEventListener('click', () => {
+  el.reportInput.value = '';
+  el.reportOutput.textContent = '';
+  el.reportMessage.textContent = '';
+});
+el.reportCopyButton.addEventListener('click', async () => {
+  try {
+    await copyText(el.reportOutput.textContent);
+    el.reportMessage.textContent = 'Отчёт скопирован.';
+    el.reportMessage.className = 'utilityMessage success';
+  } catch (error) {
+    el.reportMessage.textContent = error.message;
+    el.reportMessage.className = 'utilityMessage error';
+  }
+});
+el.idStatsButton.addEventListener('click', () => openUtilityModal(el.idStatsModal));
+el.idStatsCloseButton.addEventListener('click', () => closeUtilityModal(el.idStatsModal));
+el.idStatsModal.addEventListener('click', (event) => {
+  if (event.target === el.idStatsModal) closeUtilityModal(el.idStatsModal);
+});
+el.idStatsModes.addEventListener('click', (event) => {
+  const button = event.target.closest('[data-id-mode]');
+  if (!button) return;
+  idStatsMode = button.dataset.idMode;
+  [...el.idStatsModes.querySelectorAll('[data-id-mode]')].forEach((item) => {
+    item.classList.toggle('active', item === button);
+  });
+});
+el.idStatsCalculateButton.addEventListener('click', calculateIdStats);
+el.idStatsClearButton.addEventListener('click', () => {
+  el.idStatsInput.value = '';
+  el.idStatsMessage.textContent = '';
+  el.idStatsSummary.textContent = '';
+  el.idStatsOutput.innerHTML = '';
+  el.idStatsOutput.dataset.copyText = '';
+});
+el.idStatsCopyButton.addEventListener('click', async () => {
+  try {
+    await copyText(el.idStatsOutput.dataset.copyText);
+    el.idStatsMessage.textContent = 'Статистика скопирована.';
+    el.idStatsMessage.className = 'utilityMessage success';
+  } catch (error) {
+    el.idStatsMessage.textContent = error.message;
+    el.idStatsMessage.className = 'utilityMessage error';
+  }
+});
 window.addEventListener('online', () => {
   store.set({ offline: false });
-  loadCatalog();
+  if (store.get().employeeId) {
+    loadCapabilities();
+    loadCatalog();
+  }
 });
 window.addEventListener('offline', () => {
   store.set({ offline: true });
@@ -462,5 +931,10 @@ document.addEventListener('visibilitychange', scheduleRefresh);
 
 store.subscribe(render);
 render(store.get());
-loadCatalog();
+if (store.get().employeeId) {
+  loadCapabilities();
+  loadCatalog();
+} else {
+  openProfile({ required: true });
+}
 }

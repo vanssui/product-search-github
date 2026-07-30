@@ -13,9 +13,9 @@ test('formatRoute builds a readable long route', () => {
   );
 });
 
-test('matchesTask finds item ID and WB sticker case-insensitively', () => {
+test('matchesTask follows the v51 WB/product/MX/BOX search fields', () => {
   const task = { itemId: '48101014476', wbSticker: '48884313938', itemName: 'Комплект белья' };
-  assert.equal(matchesTask(task, '481010'), true);
+  assert.equal(matchesTask(task, '481010'), false);
   assert.equal(matchesTask(task, '48884313938'), true);
   assert.equal(matchesTask(task, 'белья'), true);
   assert.equal(matchesTask(task, 'нет'), false);

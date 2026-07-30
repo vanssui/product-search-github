@@ -15,6 +15,34 @@ function successEnvelope(data) {
   return { ok: true, data, error: null, requestId: 'server-request' };
 }
 
+test('read retries a transient BACKEND_BUSY response', async (t) => {
+  const originalFetch = globalThis.fetch;
+  let calls = 0;
+  t.after(() => { globalThis.fetch = originalFetch; });
+
+  globalThis.fetch = async () => {
+    calls += 1;
+    if (calls === 1) {
+      return jsonResponse({
+        ok: false,
+        data: null,
+        error: {
+          code: 'BACKEND_BUSY',
+          message: 'Каталог обновляется.'
+        },
+        requestId: 'busy-request'
+      });
+    }
+    return jsonResponse(successEnvelope({ totalActive: 201 }));
+  };
+
+  const client = new ApiClient(BACKEND_URL);
+  const result = await client.get('getCatalog');
+
+  assert.equal(result.totalActive, 201);
+  assert.equal(calls, 2);
+});
+
 test('timed-out POST is confirmed without sending a second POST', async (t) => {
   const originalFetch = globalThis.fetch;
   const calls = [];
@@ -33,7 +61,7 @@ test('timed-out POST is confirmed without sending a second POST', async (t) => {
     }
     return jsonResponse(successEnvelope({
       completed: true,
-      result: { owned: true, expiresAt: '2026-07-29T20:00:00.000Z' }
+      result: { updated: true, statusSearch: 'Найдено' }
     }));
   };
 
@@ -42,11 +70,11 @@ test('timed-out POST is confirmed without sending a second POST', async (t) => {
     confirmAttempts: 1,
     confirmDelayMs: 0
   });
-  const result = await client.post('takeTask', {
-    idempotencyKey: 'take:session:task'
+  const result = await client.post('updateTask', {
+    idempotencyKey: 'update:session:task'
   });
 
-  assert.equal(result.owned, true);
+  assert.equal(result.statusSearch, 'Найдено');
   assert.equal(calls.filter((call) => call.method === 'POST').length, 1);
   assert.equal(calls.filter((call) => call.method === 'GET').length, 1);
   assert.match(calls[1].url, /action=getOperationStatus/);
@@ -67,7 +95,7 @@ test('confirmation polls pending result and keeps the same idempotency key', asy
     }
     return jsonResponse(successEnvelope({
       completed: true,
-      result: { released: true }
+      result: { updated: true, statusSearch: 'Не найдено' }
     }));
   };
 
@@ -75,14 +103,14 @@ test('confirmation polls pending result and keeps the same idempotency key', asy
     confirmAttempts: 2,
     confirmDelayMs: 0
   });
-  const result = await client.post('releaseTask', {
-    idempotencyKey: 'release:session:task'
+  const result = await client.post('updateTask', {
+    idempotencyKey: 'update:session:task'
   });
 
-  assert.deepEqual(result, { released: true });
+  assert.deepEqual(result, { updated: true, statusSearch: 'Не найдено' });
   assert.equal(confirmationUrls.length, 2);
   confirmationUrls.forEach((url) => {
-    assert.match(url, /idempotencyKey=release%3Asession%3Atask/);
+    assert.match(url, /idempotencyKey=update%3Asession%3Atask/);
   });
 });
 
@@ -127,8 +155,8 @@ test('confirmed server failure is returned as an API error without another POST'
       completed: true,
       state: 'failed',
       error: {
-        code: 'TASK_LOCKED',
-        message: 'Задание занято.'
+        code: 'TASK_CHANGED',
+        message: 'Строка задания изменилась.'
       },
       originalRequestId: 'original-request'
     }));
@@ -139,10 +167,10 @@ test('confirmed server failure is returned as an API error without another POST'
     confirmDelayMs: 0
   });
   await assert.rejects(
-    client.post('takeTask', { idempotencyKey: 'failed-write' }),
+    client.post('updateTask', { idempotencyKey: 'failed-write' }),
     (error) =>
       error instanceof ApiError &&
-      error.code === 'TASK_LOCKED' &&
+      error.code === 'TASK_CHANGED' &&
       error.requestId === 'original-request'
   );
   assert.equal(postCount, 1);

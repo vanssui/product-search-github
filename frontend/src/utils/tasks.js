@@ -33,9 +33,7 @@ export function matchesTask(task, query) {
   const normalized = normalizeText(query);
   if (!normalized) return true;
   const haystack = [
-    task.itemId,
     task.wbSticker,
-    ...(task.wbStickers || []),
     task.itemName,
     task.mx,
     task.box,
@@ -45,7 +43,7 @@ export function matchesTask(task, query) {
     task.shelf,
     task.cell,
     task.action,
-    task.comment
+    task.zone
   ].map(normalizeText).join(' ');
   return haystack.includes(normalized);
 }

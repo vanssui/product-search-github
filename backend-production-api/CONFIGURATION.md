@@ -27,23 +27,19 @@ file IDs, or Script Properties.
 
 Every flag defaults to `false`:
 
-- `FEATURE_TAKE_TASK`
-- `FEATURE_RELEASE_TASK`
-- `FEATURE_COMPLETE_TASK`
+- `FEATURE_UPDATE_TASK`
 - `FEATURE_UPLOAD_PHOTO`
-- `FEATURE_UPDATE_EMPLOYEE`
-- `REQUIRE_CLAIM_FOR_COMPLETION`
 
 `READ_ONLY=true` is the master switch and overrides every feature flag. The
-current manifest also has only `spreadsheets.readonly` and `drive.readonly`
-OAuth scopes. Both protections stay in place until a separately approved,
-single-operation production pilot.
+manifest contains the Sheets and Drive scopes required by the two original
+version 51 writes, but the master switch and both feature flags stay disabled
+until a controlled production pilot.
 
 Photo upload additionally requires private `PHOTO_FOLDER_ID`.
 
 ## Activation rule
 
-Do not enable all writes at once. For each operation:
+Do not enable both writes at once. For each operation:
 
 1. choose one explicitly approved safe production task;
 2. save the current Script Properties and manifest as the rollback point;

@@ -1,4 +1,5 @@
-const EMPLOYEE_KEY = 'product_search_employee_id';
+const EMPLOYEE_KEY = 'warehouse_saas_employee_id';
+const LEGACY_GITHUB_EMPLOYEE_KEY = 'product_search_employee_id';
 const QUERY_KEY = 'product_search_query';
 const SESSION_KEY = 'product_search_session_id';
 const SELECTED_TASK_KEY = 'product_search_selected_task';
@@ -15,7 +16,9 @@ export function loadPersistentState() {
     sessionStorage.setItem(SESSION_KEY, sessionId);
   }
   return {
-    employeeId: localStorage.getItem(EMPLOYEE_KEY) || '',
+    employeeId: localStorage.getItem(EMPLOYEE_KEY) ||
+      localStorage.getItem(LEGACY_GITHUB_EMPLOYEE_KEY) ||
+      '',
     query: localStorage.getItem(QUERY_KEY) || '',
     sessionId,
     selectedToken: sessionStorage.getItem(SELECTED_TASK_KEY) || ''
@@ -23,7 +26,9 @@ export function loadPersistentState() {
 }
 
 export function saveEmployeeId(value) {
-  localStorage.setItem(EMPLOYEE_KEY, String(value || '').trim().toUpperCase());
+  const employeeId = String(value || '').trim().toUpperCase();
+  localStorage.setItem(EMPLOYEE_KEY, employeeId);
+  localStorage.setItem(LEGACY_GITHUB_EMPLOYEE_KEY, employeeId);
 }
 
 export function saveQuery(value) {

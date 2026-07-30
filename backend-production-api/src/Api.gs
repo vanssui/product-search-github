@@ -12,14 +12,8 @@ var READ_ACTIONS_ = {
 };
 
 var WRITE_ACTIONS_ = {
-  takeTask: function(payload) { return takeTaskApi_(payload); },
-  releaseTask: function(payload) { return releaseTaskApi_(payload); },
-  markFound: function(payload) { return markFoundApi_(payload); },
-  markNotFound: function(payload) { return markNotFoundApi_(payload); },
-  updateTask: function(payload) { return completeTaskApi_(payload); },
-  completeTask: function(payload) { return completeTaskApi_(payload); },
-  uploadTaskPhoto: function(payload) { return uploadTaskPhotoApi_(payload); },
-  updateEmployee: function(payload) { return updateEmployeeApi_(payload); }
+  updateTask: function(payload) { return updateTaskApi_(payload); },
+  uploadTaskPhoto: function(payload) { return uploadTaskPhotoApi_(payload); }
 };
 
 function doGet(e) {

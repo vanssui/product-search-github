@@ -75,14 +75,13 @@ function sha256WebSafe_(value) {
 }
 
 function normalizeEmployeeId_(value) {
-  var employeeId = requireText_(value, 'employeeId', 64).toUpperCase();
-  if (!/^[A-ZА-ЯЁ0-9._@-]{1,64}$/.test(employeeId)) {
-    throw apiError_(
-      'VALIDATION_ERROR',
-      'ID сотрудника содержит недопустимые символы.'
-    );
-  }
-  return employeeId;
+  return requireText_(value, 'employeeId', 64).toUpperCase();
+}
+
+function requireIdentity_(payload) {
+  return {
+    employeeId: normalizeEmployeeId_(payload.employeeId)
+  };
 }
 
 function formatDateCell_(value, timezone) {

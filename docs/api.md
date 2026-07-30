@@ -88,36 +88,30 @@ time, and photo count. It does not contain the physical source location.
 
 | HTTP | `action` | Required fields | Current state |
 |---|---|---|---|
-| POST | `takeTask` | identity, `taskToken`, idempotency key | disabled |
-| POST | `releaseTask` | identity, `taskToken`, idempotency key | disabled |
-| POST | `markFound` | identity, `taskToken`, idempotency key | disabled |
-| POST | `markNotFound` | identity, `taskToken`, idempotency key | disabled |
-| POST | `completeTask` | identity, task, result, idempotency key | disabled |
-| POST | `updateTask` | compatibility alias of completion | disabled |
+| POST | `updateTask` | employee ID, task, `Найдено`/`Не найдено`, idempotency key | disabled |
 | POST | `uploadTaskPhoto` | identity, task, image, idempotency key | disabled |
-| POST | `updateEmployee` | identity, idempotency key | disabled |
 
-Identity is `{employeeId, sessionId}`. Every write also requires a unique
-`idempotencyKey`.
+Identity is the version 51 `employeeId`. The browser also sends its `sessionId`
+for diagnostics and every write requires a unique `idempotencyKey`.
 
 `READ_ONLY=true` currently overrides all endpoint flags. The read-only OAuth
-manifest is a second independent barrier.
+mode remains the master barrier until the controlled write pilot.
 
 ## Write safety contract
 
 - A signed opaque task token binds the configured source index, row, item ID,
   WB sticker and MX without exposing the source.
 - The exact row is reread before a write; a changed row returns `TASK_CHANGED`.
-- A closed task cannot be claimed from a stale catalog.
 - A global Apps Script lock serializes critical write sections.
 - The same idempotency key and payload return the original result.
 - Reusing a key with another payload returns `IDEMPOTENCY_KEY_REUSED`.
 - A pending operation is never automatically re-executed.
 - After a timeout, the frontend performs GET `getOperationStatus`; it never
   sends a second POST automatically.
-- Claims are owned by `employeeId + sessionId` and expire after ten minutes.
-- Completion preserves V12.06 first-write-wins unless
-  `REQUIRE_CLAIM_FOR_COMPLETION=true` is separately approved.
+- `updateTask` accepts only `Найдено` or `Не найдено`, writes only status and
+  employee ID, and preserves V12.06 first-write-wins behavior.
+- If another employee already closed the row, the response is successful with
+  `alreadyClosed=true`; no second write is performed.
 - Upload accepts JPEG, PNG and WebP, updates only the configured task row, and
   trashes the newly created file if the Sheets update fails.
 
@@ -125,9 +119,8 @@ manifest is a second independent barrier.
 
 Important stable codes include `READ_ONLY`, `FEATURE_DISABLED`,
 `API_VERSION_UNSUPPORTED`, `TASK_NOT_FOUND`, `TASK_CHANGED`, `TASK_CLOSED`,
-`TASK_LOCKED`, `NOT_TASK_OWNER`, `TASK_NOT_CLAIMED`,
 `IDEMPOTENCY_KEY_REUSED`, `OPERATION_IN_PROGRESS`, `BACKEND_BUSY`,
-`PHOTO_NOT_ALLOWED`, `PHOTO_TOO_LARGE`, and `SCHEMA_ERROR`.
+`INVALID_STATUS`, `PHOTO_TOO_LARGE`, and `SCHEMA_ERROR`.
 
 ## Apps Script constraints
 

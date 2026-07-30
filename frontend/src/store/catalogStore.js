@@ -23,12 +23,16 @@ export function createCatalogStore() {
     generatedAt: '',
     loading: false,
     saving: false,
+    uploadBusy: false,
+    capabilities: {
+      updateTask: false,
+      uploadTaskPhoto: false
+    },
     offline: !navigator.onLine,
     selectedTask: null,
     selectedPhotos: [],
     photosLoading: false,
     photoBusy: false,
-    claim: null,
     message: null,
     ...loadPersistentState()
   });

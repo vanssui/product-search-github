@@ -52,7 +52,7 @@ test('master READ_ONLY disables every production write endpoint', () => {
     EXPECTED_SPREADSHEET_NAME: 'private-runtime-value',
     SOURCE_SHEETS_JSON: '[{"name":"runtime-only"}]',
     TOKEN_SECRET: 'x'.repeat(32),
-    FEATURE_COMPLETE_TASK: 'true'
+    FEATURE_UPDATE_TASK: 'true'
   });
   const context = featureContext(properties);
   const capabilities = context.getCapabilities_();
@@ -62,7 +62,7 @@ test('master READ_ONLY disables every production write endpoint', () => {
     assert.equal(enabled, false);
   });
   assert.throws(
-    () => context.assertWriteActionEnabled_('completeTask'),
+    () => context.assertWriteActionEnabled_('updateTask'),
     (error) => error.apiCode === 'READ_ONLY'
   );
 });
@@ -75,16 +75,15 @@ test('write features are independent and default to disabled', () => {
     EXPECTED_SPREADSHEET_NAME: 'private-runtime-value',
     SOURCE_SHEETS_JSON: '[{"name":"runtime-only"}]',
     TOKEN_SECRET: 'x'.repeat(32),
-    FEATURE_COMPLETE_TASK: 'true'
+    FEATURE_UPDATE_TASK: 'true'
   });
   const context = featureContext(properties);
   const capabilities = context.getCapabilities_();
 
-  assert.equal(capabilities.write.completeTask, true);
-  assert.equal(capabilities.write.markFound, true);
+  assert.equal(capabilities.write.updateTask, true);
   assert.equal(capabilities.write.uploadTaskPhoto, false);
   assert.doesNotThrow(() =>
-    context.assertWriteActionEnabled_('completeTask')
+    context.assertWriteActionEnabled_('updateTask')
   );
   assert.throws(
     () => context.assertWriteActionEnabled_('uploadTaskPhoto'),
@@ -103,7 +102,7 @@ function idempotencyContext() {
       writeLockTimeoutMs: 100,
       idempotencyTtlMs: 86_400_000
     },
-    WRITE_ACTIONS_: { completeTask: true, uploadTaskPhoto: true },
+    WRITE_ACTIONS_: { updateTask: true, uploadTaskPhoto: true },
     PropertiesService: {
       getScriptProperties: () => properties.service
     },
@@ -142,10 +141,10 @@ test('same idempotency key executes a write exactly once', () => {
   const operation = () => ({ number: ++executions });
 
   const first = context.withIdempotency_(
-    'completeTask', payload, 'request-1', operation
+    'updateTask', payload, 'request-1', operation
   );
   const second = context.withIdempotency_(
-    'completeTask', payload, 'request-2', operation
+    'updateTask', payload, 'request-2', operation
   );
 
   assert.deepEqual(first, { number: 1 });
@@ -163,12 +162,12 @@ test('reusing an idempotency key with another payload is rejected', () => {
     result: 'Найдено'
   };
   context.withIdempotency_(
-    'completeTask', base, 'request-1', () => ({ updated: true })
+    'updateTask', base, 'request-1', () => ({ updated: true })
   );
 
   assert.throws(
     () => context.withIdempotency_(
-      'completeTask',
+      'updateTask',
       { ...base, result: 'Не найдено' },
       'request-2',
       () => ({ updated: true })
@@ -186,8 +185,8 @@ test('a pending idempotency record never executes a second write', () => {
     sessionId: 'S1',
     result: 'Найдено'
   };
-  const fingerprint = context.idempotencyFingerprint_('completeTask', payload);
-  const key = context.idempotencyPropertyKey_('completeTask', 'pending-key');
+  const fingerprint = context.idempotencyFingerprint_('updateTask', payload);
+  const key = context.idempotencyPropertyKey_('updateTask', 'pending-key');
   properties.service.setProperty(key, JSON.stringify({
     state: 'pending',
     fingerprint,
@@ -198,7 +197,7 @@ test('a pending idempotency record never executes a second write', () => {
 
   assert.throws(
     () => context.withIdempotency_(
-      'completeTask',
+      'updateTask',
       payload,
       'retry',
       () => ({ number: ++executions })
@@ -208,75 +207,77 @@ test('a pending idempotency record never executes a second write', () => {
   assert.equal(executions, 0);
 });
 
-function claimContext({ status = '' } = {}) {
-  const properties = propertyStore();
+function updateTaskContext({ status = 'Поиск', employeeId = '' } = {}) {
+  const writes = [];
+  const row = ['WB-1', status, employeeId];
   const context = vm.createContext({
-    APP_CONFIG: { claimTtlMs: 600_000 },
-    PropertiesService: {
-      getScriptProperties: () => properties.service
+    APP_CONFIG: {
+      activeStatus: 'Поиск',
+      foundStatus: 'Найдено',
+      notFoundStatus: 'Не найдено'
     },
-    sha256WebSafe_: (value) =>
-      Buffer.from(String(value)).toString('base64url').padEnd(50, 'x'),
     requireText_: (value, field) => {
       const text = String(value ?? '').trim();
       if (!text) throw apiError('VALIDATION_ERROR', field);
       return text;
     },
     stringify_: (value) => String(value ?? '').trim(),
-    normalizeEmployeeId_: (value) => String(value).trim().toUpperCase(),
-    getWritableTaskContextByToken_: () => ({
-      row: [status],
-      columns: { statusSearch: 0 }
+    requireIdentity_: (payload) => ({
+      employeeId: String(payload.employeeId).trim().toUpperCase()
     }),
-    getCell_: (row, column) => row[column],
-    isActiveStatus_: (value) => !String(value ?? '').trim(),
-    safeJsonParse_: (value, fallback) => {
-      try { return JSON.parse(value); } catch { return fallback; }
-    },
+    getWritableTaskContextByToken_: () => ({
+      row,
+      rowNumber: 8,
+      columns: { wbSticker: 0, statusSearch: 1, employeeId: 2 },
+      sheet: {
+        getRange: (rowNumber, columnNumber) => ({
+          setValue: (value) => writes.push({ rowNumber, columnNumber, value })
+        })
+      }
+    }),
+    getCell_: (values, column) => values[column],
+    isActiveStatus_: (value) => String(value).trim() === 'Поиск',
+    SpreadsheetApp: { flush: () => {} },
+    clearSnapshotCache_: () => {},
     apiError_: apiError,
     Date
   });
-  vm.runInContext(source('ClaimService.gs'), context);
-  return { context, properties };
+  vm.runInContext(source('TaskWriteService.gs'), context);
+  return { context, writes };
 }
 
-test('a closed task cannot be claimed through a stale catalog token', () => {
-  const { context } = claimContext({ status: 'Найдено' });
+test('updateTask writes only the original result and employee columns', () => {
+  const { context, writes } = updateTaskContext();
+  const result = context.updateTaskApi_({
+    taskToken: 'task',
+    employeeId: 'E017',
+    newStatus: 'Найдено'
+  });
 
-  assert.throws(
-    () => context.takeTaskApi_({
-      taskToken: 'stale-task',
-      employeeId: 'E1',
-      sessionId: 'S1'
-    }),
-    (error) => error.apiCode === 'TASK_CLOSED'
-  );
+  assert.equal(result.updated, true);
+  assert.equal(result.statusSearch, 'Найдено');
+  assert.equal(result.message, 'Статус обновлён: Найдено.');
+  assert.deepEqual(writes, [
+    { rowNumber: 8, columnNumber: 2, value: 'Найдено' },
+    { rowNumber: 8, columnNumber: 3, value: 'E017' }
+  ]);
 });
 
-test('a second employee cannot take or release an active claim', () => {
-  const { context } = claimContext();
-  const first = {
+test('updateTask treats an already closed row as successful without a second write', () => {
+  const { context, writes } = updateTaskContext({
+    status: 'Не найдено',
+    employeeId: 'E009'
+  });
+  const result = context.updateTaskApi_({
     taskToken: 'task',
-    employeeId: 'E1',
-    sessionId: 'S1'
-  };
-  const second = {
-    taskToken: 'task',
-    employeeId: 'E2',
-    sessionId: 'S2'
-  };
+    employeeId: 'E017',
+    newStatus: 'Найдено'
+  });
 
-  assert.equal(context.takeTaskApi_(first).owned, true);
-  assert.throws(
-    () => context.takeTaskApi_(second),
-    (error) => error.apiCode === 'TASK_LOCKED'
-  );
-  assert.throws(
-    () => context.releaseTaskApi_(second),
-    (error) => error.apiCode === 'NOT_TASK_OWNER'
-  );
-  assert.equal(context.releaseTaskApi_(first).released, true);
-  assert.equal(context.takeTaskApi_(second).owned, true);
+  assert.equal(result.updated, false);
+  assert.equal(result.alreadyClosed, true);
+  assert.equal(result.message, 'Задание уже закрыто: Не найдено ID: E009.');
+  assert.deepEqual(writes, []);
 });
 
 test('API router exposes independent read and write endpoints', () => {
@@ -288,15 +289,20 @@ test('API router exposes independent read and write endpoints', () => {
     'getTaskPhotos',
     'getTaskPhoto',
     'getOperationStatus',
+    'updateTask',
+    'uploadTaskPhoto'
+  ].forEach((action) => {
+    assert.match(apiSource, new RegExp(`${action}: function`));
+  });
+  [
     'takeTask',
     'releaseTask',
     'markFound',
     'markNotFound',
     'completeTask',
-    'uploadTaskPhoto',
     'updateEmployee'
   ].forEach((action) => {
-    assert.match(apiSource, new RegExp(`${action}: function`));
+    assert.doesNotMatch(apiSource, new RegExp(`${action}: function`));
   });
 });
 

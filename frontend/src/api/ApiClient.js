@@ -5,6 +5,12 @@ const DEFAULT_WRITE_TIMEOUT_MS = 45000;
 const DEFAULT_CONFIRM_TIMEOUT_MS = 15000;
 const DEFAULT_CONFIRM_ATTEMPTS = 4;
 const DEFAULT_CONFIRM_DELAY_MS = 1500;
+const RETRYABLE_READ_CODES = new Set([
+  'TIMEOUT',
+  'NETWORK_ERROR',
+  'HTTP_503',
+  'BACKEND_BUSY'
+]);
 const AMBIGUOUS_WRITE_CODES = new Set([
   'TIMEOUT',
   'NETWORK_ERROR',
@@ -50,15 +56,17 @@ export class ApiClient {
   async get(action, params = {}) {
     this.assertConfigured();
     let lastError;
-    for (let attempt = 0; attempt < 2; attempt += 1) {
+    for (let attempt = 0; attempt < 3; attempt += 1) {
       try {
         return await this.request('GET', action, params, { timeoutMs: this.readTimeoutMs });
       } catch (error) {
         lastError = error;
-        if (attempt > 0 || (error instanceof ApiError && !['TIMEOUT', 'NETWORK_ERROR', 'HTTP_503'].includes(error.code))) {
+        if (attempt >= 2 ||
+            !(error instanceof ApiError) ||
+            !RETRYABLE_READ_CODES.has(error.code)) {
           throw error;
         }
-        await delay(500);
+        await delay(750 * (attempt + 1));
       }
     }
     throw lastError;

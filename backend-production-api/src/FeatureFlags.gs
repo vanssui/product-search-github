@@ -20,8 +20,7 @@ function getCapabilities_() {
       operationStatus: true
     },
     write: write,
-    masterReadOnly: APP_CONFIG.readOnly,
-    requireClaimForCompletion: APP_CONFIG.requireClaimForCompletion
+    masterReadOnly: APP_CONFIG.readOnly
   };
 }
 

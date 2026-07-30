@@ -1,16 +1,4 @@
-function markFoundApi_(payload) {
-  var next = copyObject_(payload);
-  next.result = APP_CONFIG.foundStatus;
-  return completeTaskApi_(next);
-}
-
-function markNotFoundApi_(payload) {
-  var next = copyObject_(payload);
-  next.result = APP_CONFIG.notFoundStatus;
-  return completeTaskApi_(next);
-}
-
-function completeTaskApi_(payload) {
+function updateTaskApi_(payload) {
   var taskToken = requireText_(payload.taskToken, 'taskToken', 120);
   var identity = requireIdentity_(payload);
   var result = normalizeCompletionResult_(
@@ -22,19 +10,20 @@ function completeTaskApi_(payload) {
   );
 
   if (!isActiveStatus_(currentStatus)) {
+    var currentEmployeeId = stringify_(
+      getCell_(context.row, context.columns.employeeId)
+    );
     return {
       updated: false,
       alreadyClosed: true,
       status: currentStatus,
+      statusSearch: currentStatus || 'Закрыто',
+      wbSticker: getCell_(context.row, context.columns.wbSticker),
+      message: buildAlreadyClosedMessage_(currentStatus, currentEmployeeId),
       taskToken: taskToken
     };
   }
 
-  ensureClaimAllowsWrite_(
-    taskToken,
-    identity,
-    APP_CONFIG.requireClaimForCompletion
-  );
   context.sheet
     .getRange(context.rowNumber, context.columns.statusSearch + 1)
     .setValue(result);
@@ -43,23 +32,22 @@ function completeTaskApi_(payload) {
     .setValue(identity.employeeId);
   SpreadsheetApp.flush();
   clearSnapshotCache_();
-  clearClaim_(taskToken);
   return {
     updated: true,
     alreadyClosed: false,
     status: result,
+    statusSearch: result,
+    wbSticker: getCell_(context.row, context.columns.wbSticker),
+    message: 'Статус обновлён: ' + result + '.',
     employeeId: identity.employeeId,
     taskToken: taskToken
   };
 }
 
-function updateEmployeeApi_(payload) {
-  var identity = requireIdentity_(payload);
-  return {
-    employeeId: identity.employeeId,
-    sessionId: identity.sessionId,
-    persistedByBackend: false
-  };
+function buildAlreadyClosedMessage_(status, employeeId) {
+  var normalizedStatus = stringify_(status) || 'закрыто';
+  var suffix = employeeId ? ' ID: ' + employeeId + '.' : '.';
+  return 'Задание уже закрыто: ' + normalizedStatus + suffix;
 }
 
 function normalizeCompletionResult_(value) {
@@ -71,13 +59,5 @@ function normalizeCompletionResult_(value) {
       'Допустимы только результаты "Найдено" и "Не найдено".'
     );
   }
-  return result;
-}
-
-function copyObject_(value) {
-  var result = {};
-  Object.keys(value || {}).forEach(function(key) {
-    result[key] = value[key];
-  });
   return result;
 }
