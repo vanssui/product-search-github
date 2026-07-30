@@ -1,89 +1,85 @@
-# Production read-only migration
+# Production read-only completion baseline
 
-Дата: 29 июля 2026 года.
+Updated: 30 July 2026.
 
-## Зафиксированный источник истины
+## Source of truth
 
-- Версия 51 повторно выгружена через Apps Script API с `versionNumber=51`.
-- Получены 14 файлов; 14/14 побайтно совпали с ранее проверенной локальной
-  production-копией.
-- Локальный read-only backup сохранён вне публичного репозитория.
-- Открыта фактическая production-таблица и подтверждены её название и набор
-  рабочих/служебных листов.
-- V12.06, deployment 51, код, триггеры, свойства, строки таблицы и Drive-файлы
-  не изменялись.
+- V12.06 version 51 code and behavior were audited.
+- The actual production spreadsheet, configured sources and real fields were
+  read without changing code, triggers, properties, rows or Drive files.
+- V12.06/version 51 remains untouched.
 
-## Целостная модель данных
+## Preserved business model
 
-Backend версии 51 сканирует последние максимум 5000 строк каждого из пяти
-источников. В каталог попадает только строка со статусом поиска `Поиск` и
-определяемым блоком B3/B4/B5.
+The backend scans a bounded tail of five privately configured sources. Only
+rows with search status `Поиск` and a resolvable B3/B4/B5 block enter the active
+catalog.
 
-Блок определяется в таком порядке:
+Block mapping, MX route parsing, explicit floor/row precedence, item/WB/MX/BOX
+fields, employee filters, photo presence and terminal results
+`Найдено`/`Не найдено` follow the audited v51 rules.
 
-1. фиксированный блок источника для трёх основных выгрузок;
-2. префикс/состав MX для двух вспомогательных источников;
-3. имя листа как последний fallback.
+Reports and ID statistics in v51 are local parsers for manually pasted TSV;
+they are not hidden production sheets or API write functions.
 
-Маршрут строится из последних пяти dot-separated частей MX:
-этаж → ряд → место → полка → ячейка. Явные колонки «Этаж» и «Ряд» имеют
-приоритет, если заполнены.
+## Live parity evidence
 
-Статус активной задачи — `Поиск`. `Найдено` и `Не найдено` являются
-закрывающими результатами и удаляют строку из активной выдачи после следующего
-чтения.
+During the final API v1 check, the real table was changing as employees added
+tasks. An explicit refresh was therefore added to bypass the five-minute read
+cache only on user request.
 
-## Что перенесено в read-only API
+On the same refreshed snapshot, both interfaces showed:
 
-- реальные пять источников настраиваются только через Script Properties;
-- проверка точного имени production-таблицы;
-- реальные B3/B4/B5 и реальные количества;
-- те же правила активного статуса, зон и маршрута;
-- чтение реальных колонок, включая товарный ID;
-- серверные фильтры блока, этажа, фото, ID сотрудника и поиска;
-- порционная выдача по 60 карточек, максимум 100;
-- 20-секундный chunked cache без изменения Sheets;
-- HMAC task token без публикации имени листа и номера строки;
-- lazy photo read: file ID проверяется против выбранной активной задачи;
-- любой POST безусловно отклоняется с `READ_ONLY`.
+- 72 active tasks;
+- B3 = 4;
+- B5 = 68;
+- B3 floors: 2 = 2, 3 = 1, 7 = 1;
+- the same first B3 tasks, WB stickers, names, MX and routes.
 
-## Что перенесено во frontend
+Minutes later the separate API correctly showed the newly arrived B4 and B3
+rows as the total advanced to 74. This is live data movement, not a parity
+failure.
 
-- название «Поиск товаров» без тестовых/демонстрационных подписей;
-- «Все», B3/B4/B5 и реальные счётчики;
-- этажи и реальные счётчики;
-- «Мои задания», «С фото» и поиск;
-- крупные карточки с WB-стикером, MX, товаром, BOX, временем, статусом и маршрутом;
-- mobile detail screen и tablet/desktop split view;
-- подробности задания и отложенный просмотр фото;
-- восстановление выбранной карточки через `sessionStorage`;
-- loading/error/offline/empty states;
-- измерение catalog load, next page, opening task и lazy photo load;
-- ширины 360/390/430/768/1024 без desktop scaling.
+## Implemented read functionality
 
-## Функциональные расхождения
+- real blocks, counts, floors, active catalog and route order;
+- search, all blocks, my tasks and photo filter;
+- business cards and complete details;
+- paginated/complete bounded snapshot;
+- explicit fresh refresh plus cached background refresh;
+- statistics endpoint;
+- lazy photo metadata and image payload;
+- selected-task restoration;
+- mobile detail surface and tablet/desktop split layout;
+- in-memory performance metrics.
 
-| Функция | Production 51 | GitHub read-only | Статус |
+## Storage independence
+
+The public task contract contains no Spreadsheet ID, sheet name, row number or
+Drive file ID. The frontend receives only business DTOs plus signed opaque task
+and photo tokens.
+
+## Current write state
+
+The write services are implemented but disabled:
+
+- take/release claim;
+- found/not-found/completion;
+- photo upload;
+- employee identity normalization;
+- idempotency and GET operation confirmation.
+
+Production deployment reports all write capabilities false and rejects a POST
+with `READ_ONLY`. Its manifest has only readonly OAuth scopes.
+
+## Known functional gaps
+
+| Scenario | V12.06 | GitHub/API | State |
 |---|---|---|---|
-| Активные строки | Пять источников, хвост 5000 | То же | реализовано по коду |
-| Блоки | Только B3/B4/B5 из активных строк | То же + кнопка «Все» | расширение |
-| Этажи | Колонка, затем fallback MX | То же | реализовано |
-| Поиск | Без отдельного товарного ID | Включает товарный ID | расширение |
-| «Мои задания» | Сравнение `employeeId` | То же | реализовано |
-| «С фото» | `hasPhoto` | То же | реализовано |
-| Карточки и детали | Все production-поля vNext | Те же поля, крупнее | реализовано |
-| Просмотр фото | Автозагрузка всех фото карточки | Только после нажатия | оптимизация |
-| Отчёт | Локальный разбор вставленного TSV | Пока отсутствует | не перенесено |
-| Статистика ID | Локальный разбор вставленного TSV | Пока отсутствует | не перенесено |
-| Завершение | `updateTask`, first-write-wins | POST отключён | ожидает write-аудит |
-| Загрузка фото | Drive + ID в строке | POST отключён | ожидает write-аудит |
-| take/release | В версии 51 отсутствуют | Отключены | требует решения |
-| Owner lock / TTL | В версии 51 отсутствуют | Отключены | требует решения |
-
-## Текущий безопасный рубеж
-
-Отдельный Apps Script создан и настроен реальными ID только в Script
-Properties. Исходники в GitHub не содержат этих значений. Для первого чтения
-Google требует одно OAuth-согласие владельца на `spreadsheets.readonly` и
-`drive.readonly`. До этого согласия Pages не переключается с прежнего backend,
-чтобы не публиковать неработающий интерфейс.
+| Read catalog and cards | production | production | parity confirmed |
+| Search/item ID | item ID not explicit | item ID included | intentional extension |
+| Reports | local pasted TSV parser | absent | not yet migrated |
+| ID statistics | local pasted TSV parser | API aggregates exist, pasted workflow absent | partial |
+| Completion | first-write-wins | implemented, disabled | needs approved one-task pilot |
+| Photo upload | Drive + row reference | implemented, disabled | needs approved one-task pilot |
+| take/release claim | absent | implemented, disabled | optional enhancement decision |
