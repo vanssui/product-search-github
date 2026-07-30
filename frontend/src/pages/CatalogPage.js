@@ -2,6 +2,7 @@ import '../styles/app.css';
 import { ApiError } from '../api/ApiClient.js';
 import { createProductSearchApi } from '../api/ProductSearchApi.js';
 import { APP_CONFIG } from '../config/app.js';
+import { buildCatalogRequestParams } from '../api/catalogRequest.js';
 import { createCatalogStore, deriveLocalCatalog } from '../store/catalogStore.js';
 import { saveEmployeeId, saveQuery, saveSelectedTask } from '../store/persistence.js';
 import { renderAppShell } from '../components/AppShell.js';
@@ -63,19 +64,6 @@ function recordMetric(name, startedAt, extra = {}) {
   return entry;
 }
 
-function catalogParams(state, page) {
-  return {
-    zone: state.zone,
-    floor: state.floor,
-    query: state.query,
-    photoOnly: state.photoOnly,
-    myOnly: state.myOnly,
-    employeeId: state.employeeId,
-    page,
-    pageSize: PAGE_SIZE
-  };
-}
-
 function applyLocalCatalog(patch = {}, { resetLimit = true } = {}) {
   const result = deriveLocalCatalog(
     { ...store.get(), ...patch },
@@ -109,9 +97,13 @@ async function loadCatalog({
   if (!silent) setNotice('');
 
   try {
-    const parameters = append
-      ? catalogParams(state, page)
-      : { page: 1, pageSize: SNAPSHOT_PAGE_SIZE, fresh };
+    const parameters = buildCatalogRequestParams(state, {
+      append,
+      page,
+      pageSize: PAGE_SIZE,
+      snapshotPageSize: SNAPSHOT_PAGE_SIZE,
+      fresh
+    });
     const data = await api.getCatalog(parameters);
     if (sequence !== requestSequence) return;
 
