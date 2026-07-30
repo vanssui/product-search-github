@@ -1,51 +1,39 @@
-# Production completion gate
+# План миграции
 
-## Current state — 30 July 2026
+## Текущее состояние
 
-- GitHub frontend reads real production tasks through the separate API.
-- V12.06/version 51 is unchanged and remains available in parallel.
-- Read-only parity has been rechecked on a live snapshot.
-- The API v1 router, layers, capabilities and disabled write safety foundation
-  are deployed in the separate backend.
-- Public task/photo DTOs do not expose Sheets or Drive storage identifiers.
-- All production writes remain blocked by master flag, per-feature flags and
-  readonly OAuth scopes.
+Новая система работает только с изолированной тестовой таблицей. Production Script ID
+и deployment версии 51 не изменяются и намеренно не публикуются в репозитории.
 
-## Remaining gated work
+## Перед production-подключением
 
-Write functions must be enabled one at a time:
+1. Зафиксировать успешный test baseline: 100 задач, пустая test Drive-папка,
+   отсутствие `CLAIM_*` и `IDEMP_*`.
+2. Создать отдельный production Apps Script deployment нового backend; не
+   переиспользовать test deployment и не обновлять V12.06/version 51.
+3. Установить production Spreadsheet/Drive IDs только в Script Properties нового
+   production backend после отдельного подтверждения владельца.
+4. Установить `APP_CONFIG.environment = production` и удалить `TestSetup.gs` из
+   production-сборки, чтобы fixture cleanup физически отсутствовал.
+5. Выполнить read-only smoke test нового production backend: `health`,
+   `getTasks`, схема листов, число задач и CORS. Записи ещё не выполнять.
+6. Провести одну согласованную тестовую запись на заранее выбранной production-строке,
+   затем проверить таблицу и Drive вручную.
+7. Выпустить immutable production-версию нового backend и сохранить её Deployment ID.
+8. Создать отдельное GitHub environment `production` с требованием ручного
+   подтверждения deployment.
+9. Заменить `VITE_BACKEND_URL` только после явной команды владельца и сохранить
+   предыдущий test Pages artifact для быстрого отката.
+10. Провести ограниченный пилот, сохраняя рабочий URL V12.06/version 51 без изменений.
+11. Сравнить ошибки и время ответа, затем расширять аудиторию поэтапно.
+12. Старые deployment архивировать только отдельной командой после подтверждённого
+    отсутствия обращений; это не входит в переключение Pages.
 
-1. owner chooses one safe real task and states its WB sticker/task identity;
-2. save backend properties, manifest and task state;
-3. temporarily grant the minimum scope for one operation;
-4. enable only that operation;
-5. execute the same scenario in V12.06 and GitHub;
-6. compare row values, active catalog, Drive files and user-visible result;
-7. restore the selected task;
-8. keep the flag enabled only after exact parity; otherwise disable and roll
-   back immediately.
+## Что изменится при переключении
 
-Recommended order:
+- В отдельной production-сборке `APP_CONFIG.environment` станет `production`.
+- `APP_CONFIG.spreadsheetId` и `APP_CONFIG.photoFolderId` будут заменены после подтверждения.
+- `TestSetup.gs` не войдёт в production-сборку.
+- GitHub repository variable `VITE_BACKEND_URL` будет указывать на утверждённое deployment нового backend.
 
-1. `takeTask` and `releaseTask` — optional enhancement, not present in v51;
-2. `markFound` / completion;
-3. `markNotFound` / completion;
-4. `uploadTaskPhoto`;
-5. employee profile persistence only if a real backend write is actually
-   needed.
-
-Because take/release is absent from V12.06, its acceptance criterion is safe
-concurrency and no table mutation, not visual parity.
-
-## Cutover conditions
-
-Do not switch employees or disable V12.06 until:
-
-- every critical scenario has a completed parity row in the matrix;
-- a limited pilot has no unresolved data divergence;
-- rollback artifacts and private configuration backups exist;
-- performance is measured on phone and tablet;
-- the owner gives an explicit cutover command.
-
-Archiving old deployments is a separate operation and is not implied by
-frontend cutover.
+Ни один из этих шагов не требует обновления или архивирования deployment версии 51.

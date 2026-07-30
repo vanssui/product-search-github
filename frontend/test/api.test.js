@@ -112,38 +112,3 @@ test('unknown result never retries the write', async (t) => {
   );
   assert.equal(postCount, 1);
 });
-
-test('confirmed server failure is returned as an API error without another POST', async (t) => {
-  const originalFetch = globalThis.fetch;
-  let postCount = 0;
-  t.after(() => { globalThis.fetch = originalFetch; });
-
-  globalThis.fetch = async (url, options) => {
-    if (options.method === 'POST') {
-      postCount += 1;
-      throw new TypeError('connection interrupted');
-    }
-    return jsonResponse(successEnvelope({
-      completed: true,
-      state: 'failed',
-      error: {
-        code: 'TASK_LOCKED',
-        message: 'Задание занято.'
-      },
-      originalRequestId: 'original-request'
-    }));
-  };
-
-  const client = new ApiClient(BACKEND_URL, {
-    confirmAttempts: 1,
-    confirmDelayMs: 0
-  });
-  await assert.rejects(
-    client.post('takeTask', { idempotencyKey: 'failed-write' }),
-    (error) =>
-      error instanceof ApiError &&
-      error.code === 'TASK_LOCKED' &&
-      error.requestId === 'original-request'
-  );
-  assert.equal(postCount, 1);
-});

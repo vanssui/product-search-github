@@ -1,48 +1,35 @@
-# Functional parity matrix
+# Матрица функционального соответствия
 
-Updated: 30 July 2026.
+Этот файл фиксирует завершённый E2E изолированного test backend. Он не является
+заявлением о завершённой production-миграции. Актуальный production read-only
+статус находится в `production-readonly-migration.md`.
 
-`confirmed` means observed against real production or completed in the isolated
-write fixture. It does not mean production write activation is approved.
+Статус: полный E2E на опубликованном GitHub Pages и test backend выполнен
+29 июля 2026 года. Fixture восстановлен до 100 задач, test Drive-папка очищена.
 
-| Function | V12.06 behavior | GitHub/API behavior | Result | Next action |
+| Функция | Версия 51 | GitHub-версия | Результат | Комментарий |
 |---|---|---|---|---|
-| Active sources | five configured source tails | private adapter, same five sources | confirmed | keep read regression |
-| Active status | `Поиск` | `Поиск` | confirmed | — |
-| Blocks and counts | B3/B4/B5 | same live blocks/counts | confirmed | — |
-| Floors | explicit columns, then MX | same | confirmed | — |
-| Route ordering | zone/location order | same | confirmed | — |
-| Search WB/product/MX/BOX | client search | local search on API DTO | confirmed | — |
-| Search item ID | not explicit | supported | intentional improvement | document |
-| My tasks | employee ID equality | same | implemented | real employee smoke |
-| Photo filter | row has photo IDs | `hasPhoto` DTO | confirmed | — |
-| Card/detail fields | vNext fields | same business fields, larger UI | confirmed | continuing visual QA |
-| Storage abstraction | HTML knows returned row object | opaque DTO/tokens | improved | — |
-| Photo list/read | Drive IDs then base64 | opaque token, lazy base64 | confirmed | — |
-| Refresh | direct getTasks | cached + explicit fresh | confirmed | — |
-| Take/release | absent | claim TTL/owner lock | isolated E2E only | owner decision |
-| Second session | first completion wins | claim lock + first completion wins | isolated E2E only | production pilot |
-| Found | `updateTask` | `markFound`/completion | code + isolated E2E | production pilot |
-| Not found | `updateTask` | `markNotFound`/completion | code + unit tests | production pilot |
-| Duplicate write | first status reread | idempotency + status reread | isolated E2E/unit | production pilot |
-| Lost response | failure callback | GET status, no second POST | unit confirmed | production pilot |
-| Upload photo | Drive + last six IDs | same rule + rollback on row failure | isolated E2E | production pilot |
-| Reports | pasted TSV modal | absent | not matched | implement after write parity |
-| ID statistics | pasted TSV modal | API aggregates only | partial | define desired UX |
-| Phone 390 px | vNext mobile | mobile-first detail surface | previously confirmed | recheck every release |
+| Получение активных строк | `getTasks` | `GET action=getTasks` | успешно | 100 синтетических задач |
+| Поиск по ID | клиентский | клиентский | успешно | 1 из 100 |
+| Поиск по WB-стикеру | клиентский | клиентский | успешно | unit test, несколько стикеров |
+| Сортировка MX | серверная | серверная | успешно | зона → этаж → ряд → место → полка → ячейка |
+| Взять задание | отсутствует | `takeTask` | успешно | реальный Pages POST |
+| Блокировка второй сессии | только first-write-wins | явный owner lock | успешно | `TASK_LOCKED` в независимой сессии |
+| Найдено | `updateTask` | `completeTask` | успешно | список уменьшился до 99 |
+| Не найдено | `updateTask` | `completeTask` | не запускалось отдельно | использует тот же handler, допустимый статус проверяется backend |
+| Повторное завершение | `alreadyClosed` | `alreadyClosed` + idempotency | по коду | отдельно в этом прогоне не запускалось |
+| Загрузка фото | Drive + ID в строке | Drive + ID в строке | успешно | `Фото загружено (1)` |
+| Получение фото | base64 | base64 | по коду | отдельно в этом прогоне не запускалось |
+| Освобождение | отсутствует | `releaseTask` | успешно | ownership снят |
+| Истечение TTL | отсутствует | 10 минут | подтверждено | после TTL новая сессия может взять задачу |
+| Две сессии | first-write-wins | explicit ownership | успешно | блокировка внутри TTL подтверждена |
+| Ошибка сети | failure handler | timeout + read-only confirmation | успешно | unit test: один POST, затем только GET status |
+| Mobile 390 px | mobile layout | mobile-first | успешно | 390×844, `scrollWidth = 390` |
+| Polling | 150/300 секунд | 150/300 секунд | по коду | не выполняется при открытой карточке |
 
-## Automated checks
+Дополнительно подтверждено:
 
-- 19 tests currently cover feature gates, readonly override, idempotency,
-  pending-operation behavior, stale closed task, two-session claim ownership,
-  API action allow-list, hidden storage identifiers, timeout confirmation,
-  filters, route formatting and search.
-- Production Vite build and Apps Script syntax checks pass.
-- Browser smoke check found no console warnings or errors.
-- Production POST smoke returns `READ_ONLY`.
-
-## Completion rule
-
-The migration cannot be labelled complete until completion, not-found and photo
-upload each pass the approved one-task production comparison and are restored
-without residual data or files.
+- GET и POST CORS: `Access-Control-Allow-Origin: *` на 302 redirect и 200 JSON;
+- после восьми успешных write-операций было ровно восемь `IDEMP_*`;
+- неуспешный конкурентный `takeTask` не создал idempotency-запись;
+- финальный fixture status: 100 задач, 0 фото, 0 claims, 0 idempotency records.

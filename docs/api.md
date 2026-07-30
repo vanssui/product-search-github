@@ -1,16 +1,8 @@
-# Product Search API v1
+# JSON API нового backend
 
-The frontend communicates only with this JSON API. It does not know the
-Spreadsheet ID, sheet names, row numbers, Drive file IDs, Script Properties, or
-column layout.
+Все ответы имеют единый envelope.
 
-All requests include `apiVersion=v1`. POST bodies use
-`Content-Type: text/plain;charset=utf-8` so Apps Script does not require a CORS
-preflight.
-
-## Envelope
-
-Success:
+Успех:
 
 ```json
 {
@@ -18,16 +10,14 @@ Success:
   "data": {},
   "error": null,
   "requestId": "uuid",
-  "timestamp": "2026-07-30T00:00:00.000Z",
+  "timestamp": "2026-07-29T00:00:00.000Z",
   "meta": {
-    "apiVersion": "v1",
-    "readOnly": true,
-    "serverDurationMs": 420
+    "serverDurationMs": 1200
   }
 }
 ```
 
-Failure:
+Ошибка:
 
 ```json
 {
@@ -38,100 +28,74 @@ Failure:
     "message": "Понятное сообщение"
   },
   "requestId": "uuid",
-  "timestamp": "2026-07-30T00:00:00.000Z",
-  "meta": {
-    "apiVersion": "v1",
-    "readOnly": true,
-    "serverDurationMs": 35
-  }
+  "timestamp": "2026-07-29T00:00:00.000Z"
 }
 ```
 
-## Read endpoints
+## Чтение
 
-| HTTP | `action` | Purpose |
+| HTTP | Action | Параметры | Назначение |
+|---|---|---|---|
+| GET | `health` | — | состояние test backend |
+| GET | `getTasks` | — | активные строки всех разрешённых листов |
+| GET | `getTaskDetails` | `sheetName`, `rowNumber`, `taskToken` | перечитать конкретную строку |
+| GET | `getTaskPhoto` | `fileId` | получить тестовое фото как base64 |
+| GET | `getOperationStatus` | `writeAction`, `idempotencyKey` | read-only подтверждение результата записи после timeout |
+| GET | `getTestEnvironmentStatus` | — | test-only счётчики задач, фото и временных свойств |
+
+## Запись
+
+POST-body отправляется как JSON с `Content-Type: text/plain;charset=utf-8`, чтобы не инициировать CORS preflight, который Apps Script не обрабатывает.
+
+| Action | Обязательные поля | Назначение |
 |---|---|---|
-| GET | `health` | Runtime mode, API version and source count |
-| GET | `getCapabilities` | Enabled read/write capabilities |
-| GET | `getCatalog` | Paginated active catalog and facets |
-| GET | `getTask` | Fresh active task by opaque `taskToken` |
-| GET | `getStatistics` | Counts by block, floor, status and employee |
-| GET | `getTaskPhotos` | Opaque photo references for one task |
-| GET | `getTaskPhoto` | Lazy image payload by `photoToken` |
-| GET | `getOperationStatus` | Confirm a timed-out write without repeating it |
+| `takeTask` | identity + task + `idempotencyKey` | взять задание на 10 минут |
+| `releaseTask` | identity + task + `idempotencyKey` | освободить своё задание |
+| `updateTask` | identity + task + `newStatus`, `idempotencyKey` | совместимый alias завершения |
+| `completeTask` | identity + task + `newStatus`, `idempotencyKey` | записать результат |
+| `uploadTaskPhoto` | identity + task + file fields, `idempotencyKey` | добавить фото |
 
-`getCatalog` accepts `zone`, `floor`, `query`, `photoOnly`, `myOnly`,
-`employeeId`, `page`, `pageSize`, and `fresh`. `fresh=true` is reserved for an
-explicit user refresh and invalidates only the read snapshot cache.
-
-The task projection contains business fields only: opaque `taskToken`, zone,
-item/WB/MX/BOX/location fields, statuses, employee/picker IDs, action, comment,
-time, and photo count. It does not contain the physical source location.
-
-`getTaskPhotos` returns:
+Identity:
 
 ```json
 {
-  "taskToken": "opaque",
-  "photoCount": 1,
-  "photos": [
-    {
-      "photoToken": "opaque",
-      "index": 0,
-      "contentEndpoint": "getTaskPhoto"
-    }
-  ]
+  "employeeId": "E017",
+  "sessionId": "browser-session-uuid"
 }
 ```
 
-## Write endpoints
+Task identity:
 
-| HTTP | `action` | Required fields | Current state |
-|---|---|---|---|
-| POST | `takeTask` | identity, `taskToken`, idempotency key | disabled |
-| POST | `releaseTask` | identity, `taskToken`, idempotency key | disabled |
-| POST | `markFound` | identity, `taskToken`, idempotency key | disabled |
-| POST | `markNotFound` | identity, `taskToken`, idempotency key | disabled |
-| POST | `completeTask` | identity, task, result, idempotency key | disabled |
-| POST | `updateTask` | compatibility alias of completion | disabled |
-| POST | `uploadTaskPhoto` | identity, task, image, idempotency key | disabled |
-| POST | `updateEmployee` | identity, idempotency key | disabled |
+```json
+{
+  "sheetName": "Выгрузка Б3",
+  "rowNumber": 2,
+  "taskToken": "sha256-web-safe-token"
+}
+```
 
-Identity is `{employeeId, sessionId}`. Every write also requires a unique
-`idempotencyKey`.
+Разрешённые конечные статусы: `Найдено`, `Не найдено`.
 
-`READ_ONLY=true` currently overrides all endpoint flags. The read-only OAuth
-manifest is a second independent barrier.
+## Защита
 
-## Write safety contract
+- allow-list actions;
+- allow-list листов;
+- целый `rowNumber >= 2`;
+- `taskToken` включает лист, строку, item ID, WB и MX;
+- ScriptLock для критических секций;
+- владелец — пара `employeeId + sessionId`;
+- claim TTL — 10 минут;
+- обязательный idempotency key для каждой записи;
+- потерянный или долгий POST-ответ не запускает второй POST: frontend опрашивает
+  `getOperationStatus` с исходным idempotency key;
+- серверный MIME allow-list: JPEG, PNG, WebP;
+- максимальный декодированный размер фото — 5 МБ;
+- чтение фото разрешено только из тестовой папки;
+- ошибки журналируются без тела фото и персональных данных.
 
-- A signed opaque task token binds the configured source index, row, item ID,
-  WB sticker and MX without exposing the source.
-- The exact row is reread before a write; a changed row returns `TASK_CHANGED`.
-- A closed task cannot be claimed from a stale catalog.
-- A global Apps Script lock serializes critical write sections.
-- The same idempotency key and payload return the original result.
-- Reusing a key with another payload returns `IDEMPOTENCY_KEY_REUSED`.
-- A pending operation is never automatically re-executed.
-- After a timeout, the frontend performs GET `getOperationStatus`; it never
-  sends a second POST automatically.
-- Claims are owned by `employeeId + sessionId` and expire after ten minutes.
-- Completion preserves V12.06 first-write-wins unless
-  `REQUIRE_CLAIM_FOR_COMPLETION=true` is separately approved.
-- Upload accepts JPEG, PNG and WebP, updates only the configured task row, and
-  trashes the newly created file if the Sheets update fails.
+## Важное ограничение Apps Script
 
-## Error codes
-
-Important stable codes include `READ_ONLY`, `FEATURE_DISABLED`,
-`API_VERSION_UNSUPPORTED`, `TASK_NOT_FOUND`, `TASK_CHANGED`, `TASK_CLOSED`,
-`TASK_LOCKED`, `NOT_TASK_OWNER`, `TASK_NOT_CLAIMED`,
-`IDEMPOTENCY_KEY_REUSED`, `OPERATION_IN_PROGRESS`, `BACKEND_BUSY`,
-`PHOTO_NOT_ALLOWED`, `PHOTO_TOO_LARGE`, and `SCHEMA_ERROR`.
-
-## Apps Script constraints
-
-Apps Script web apps answer through a Google redirect. Browser CORS behavior
-must be smoke-tested after each deployment. Requests are subject to Apps Script
-execution-time and service quotas; the client therefore treats a lost response
-as an unknown result and confirms by idempotency key.
+`ContentService` не позволяет приложению задавать произвольные CORS headers.
+В deployment тестового backend Google возвращает `Access-Control-Allow-Origin: *`
+для redirect и конечного JSON-ответа; это проверяется реальным браузером после
+каждого изменения deployment.

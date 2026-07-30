@@ -16,9 +16,8 @@ GitHub Pages (Vite, mobile-first)
 ```
 
 Production-проект `V12.06` и deployment версии 51 остаются отдельной,
-неизменяемой рабочей системой. Новый backend уже имеет версионированный API v1
-и защитный код операций записи, но production deployment работает строго в
-режиме чтения.
+неизменяемой рабочей системой. Первый production-срез нового backend принимает
+только GET и не содержит операций записи.
 
 ## Локальный запуск
 
@@ -47,14 +46,10 @@ npm run build
 
 - `frontend/` — самостоятельный GitHub Pages UI без `google.script.run`.
 - `backend-apps-script/` — изолированный test backend для write/E2E-проверок.
-- `backend-production-api/` — отдельный production API и Sheets/Drive adapters.
+- `backend-production-api/` — отдельный production API; текущая сборка только читает.
 - `docs/current-system-audit.md` — read-only аудит версии 51.
 - `docs/production-readonly-migration.md` — аудит бизнес-логики и статус реальной миграции.
-- `docs/architecture.md` — границы и зависимости системы.
-- `docs/frontend.md`, `docs/backend.md` — устройство слоёв.
 - `docs/api.md` — контракт API.
-- `docs/data-contract.md` — публичные DTO и приватный adapter boundary.
-- `docs/deployment.md`, `docs/recovery.md`, `docs/extending.md` — эксплуатация.
 - `docs/parity-test-report.md` — матрица функционального соответствия.
 - `MIGRATION.md` — условия будущего production-переключения.
 
@@ -65,8 +60,7 @@ npm run build
 - В репозитории находится только исходный код backend, но не данные экземпляра Apps Script,
   не содержимое таблицы и не файлы Google Drive.
 - Публичный URL backend не считается секретом.
-- Production API deployment version 10 отвергает любой POST с `READ_ONLY`.
-- Публичные DTO не содержат имён листов, номеров строк и Drive file IDs.
+- Production read-only deployment отвергает любой POST с `READ_ONLY`.
 - Test-записи проверяют лист, номер строки, неизменяемый `taskToken`, владельца задания и допустимый статус.
 - POST-запросы не повторяются автоматически; при timeout frontend проверяет результат
   по тому же `idempotencyKey` через read-only endpoint.

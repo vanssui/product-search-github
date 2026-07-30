@@ -25,17 +25,6 @@ function clampText_(value, maxLength) {
   return stringify_(value).slice(0, maxLength);
 }
 
-function requireText_(value, fieldName, maxLength) {
-  var text = stringify_(value);
-  if (!text) {
-    throw apiError_(
-      'VALIDATION_ERROR',
-      'Не заполнено обязательное поле: ' + fieldName + '.'
-    );
-  }
-  return maxLength ? text.slice(0, maxLength) : text;
-}
-
 function parseBoolean_(value) {
   var text = stringify_(value).toLowerCase();
   return text === '1' || text === 'true' || text === 'yes';
@@ -63,26 +52,6 @@ function webSafeHmac_(value) {
     Utilities.Charset.UTF_8
   );
   return Utilities.base64EncodeWebSafe(bytes).replace(/=+$/, '');
-}
-
-function sha256WebSafe_(value) {
-  var bytes = Utilities.computeDigest(
-    Utilities.DigestAlgorithm.SHA_256,
-    String(value),
-    Utilities.Charset.UTF_8
-  );
-  return Utilities.base64EncodeWebSafe(bytes).replace(/=+$/, '');
-}
-
-function normalizeEmployeeId_(value) {
-  var employeeId = requireText_(value, 'employeeId', 64).toUpperCase();
-  if (!/^[A-ZА-ЯЁ0-9._@-]{1,64}$/.test(employeeId)) {
-    throw apiError_(
-      'VALIDATION_ERROR',
-      'ID сотрудника содержит недопустимые символы.'
-    );
-  }
-  return employeeId;
 }
 
 function formatDateCell_(value, timezone) {
