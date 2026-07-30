@@ -1,4 +1,7 @@
 function getCatalogApi_(payload) {
+  if (parseBoolean_(payload.fresh)) {
+    clearSnapshotCache_();
+  }
   var snapshot = getTaskSnapshot_();
   var filters = normalizeCatalogFilters_(payload);
   var matching = filterTasks_(snapshot.tasks, filters, true);
@@ -252,7 +255,6 @@ function projectTask_(task) {
   return {
     taskToken: task.taskToken,
     zone: task.zone,
-    sourceLabel: task.sourceLabel,
     itemId: task.itemId,
     wbSticker: task.wbSticker,
     wbStickers: task.wbStickers,
@@ -274,7 +276,6 @@ function projectTask_(task) {
     employeeId: task.employeeId,
     createdAt: task.createdAt,
     timeFilled: task.timeFilled,
-    photoFileIds: task.photoFileIds,
     photoCount: task.photoCount,
     hasPhoto: task.hasPhoto
   };
@@ -288,13 +289,59 @@ function findTaskByToken_(tasks, token) {
 }
 
 function buildTaskToken_(task) {
-  return webSafeHmac_([
-    task._sheetName,
-    task._rowNumber,
+  var reference = [
+    '1',
+    sourceIndexForSheet_(task._sheetName),
+    task._rowNumber
+  ].join(':');
+  var encodedReference = Utilities.base64EncodeWebSafe(
+    Utilities.newBlob(reference).getBytes()
+  ).replace(/=+$/, '');
+  var signature = webSafeHmac_([
+    encodedReference,
     task.itemId,
     task.wbSticker,
     task.mx
   ].join('|'));
+  return encodedReference + '.' + signature;
+}
+
+function sourceIndexForSheet_(sheetName) {
+  for (var index = 0; index < APP_CONFIG.sourceSheets.length; index += 1) {
+    if (stringify_(APP_CONFIG.sourceSheets[index].name) === sheetName) {
+      return index;
+    }
+  }
+  throw apiError_('CONFIG_ERROR', 'Источник задания не настроен.');
+}
+
+function decodeTaskReference_(taskToken) {
+  var parts = stringify_(taskToken).split('.');
+  if (parts.length !== 2) {
+    throw apiError_('TASK_INVALID', 'Некорректный taskToken.');
+  }
+  var decoded;
+  try {
+    decoded = Utilities.newBlob(
+      Utilities.base64DecodeWebSafe(parts[0])
+    ).getDataAsString();
+  } catch (error) {
+    throw apiError_('TASK_INVALID', 'Некорректный taskToken.');
+  }
+  var values = decoded.split(':');
+  var sourceIndex = Number(values[1]);
+  var rowNumber = Number(values[2]);
+  if (values[0] !== '1' || !Number.isInteger(sourceIndex) ||
+      sourceIndex < 0 || sourceIndex >= APP_CONFIG.sourceSheets.length ||
+      !Number.isInteger(rowNumber) || rowNumber < 2) {
+    throw apiError_('TASK_INVALID', 'Некорректная ссылка на задание.');
+  }
+  return {
+    encodedReference: parts[0],
+    signature: parts[1],
+    sourceIndex: sourceIndex,
+    rowNumber: rowNumber
+  };
 }
 
 function isActiveStatus_(value) {
@@ -411,6 +458,16 @@ function writeSnapshotCache_(snapshot) {
     generatedAt: snapshot.generatedAt
   });
   cache.putAll(values, APP_CONFIG.cacheSeconds);
+}
+
+function clearSnapshotCache_() {
+  var cache = getScriptCache_();
+  if (!cache) return;
+  var keys = [APP_CONFIG.cachePrefix + 'meta'];
+  for (var index = 0; index < 20; index += 1) {
+    keys.push(APP_CONFIG.cachePrefix + 'chunk_' + index);
+  }
+  cache.removeAll(keys);
 }
 
 function getScriptCache_() {

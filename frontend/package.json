@@ -8,7 +8,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1",
-    "test": "node --test"
+    "test": "node --test test/*.test.js ../backend-production-api/test/*.test.mjs"
   },
   "devDependencies": {
     "vite": "^7.0.0"
