@@ -35,6 +35,10 @@ jobs:
       - name: Test
         working-directory: frontend
         run: pnpm test
+      - name: Configure v71 read-only mirror
+        env:
+          VITE_BACKEND_URL: ${{ vars.VITE_BACKEND_URL }}
+        run: node tools/configure-v71-runtime.mjs
       - name: Build
         working-directory: frontend
         env:

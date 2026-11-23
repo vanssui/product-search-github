@@ -15,3 +15,6 @@ service-account*.json
 credentials*.json
 .DS_Store
 coverage/
+
+# Local browser-test data, no production records
+tools/v71-mirror-browser-tests.json

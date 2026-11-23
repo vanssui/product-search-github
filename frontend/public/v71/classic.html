@@ -1,0 +1,2256 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<!-- Native v71 GitHub Pages mirror. Google Script transport replaced with a safe API adapter. -->
+<script src="./runtime-config.js"></script>
+<script src="./bridge.js"></script>
+  <base target="_top">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Поиск товаров</title>
+  <style>
+:root {
+      --bg: #f2efe8;
+      --surface: #fffdf9;
+      --surface-strong: #ffffff;
+      --line: #e5ddd0;
+      --ink: #1f1d1a;
+      --muted: #70685e;
+      --accent: #0f766e;
+      --accent-soft: #ddf4ef;
+      --found: #1f8f4f;
+      --found-soft: #e7f7ed;
+      --missing: #c34a3b;
+      --missing-soft: #fde9e5;
+      --shadow: 0 18px 38px rgba(60, 42, 17, 0.08);
+      --radius-xl: 26px;
+      --radius-lg: 18px;
+      --radius-md: 14px;
+      --tap: 50px;
+      --phone-shell: 430px;
+      --danger-gradient: linear-gradient(135deg, #c34a3b 0%, #a6382d 100%);
+      --found-gradient: linear-gradient(135deg, #1f8f4f 0%, #167446 100%);
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      width: 100%;
+      font-family: Arial, sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top right, rgba(15, 118, 110, 0.1), transparent 28%),
+        radial-gradient(circle at left bottom, rgba(214, 145, 65, 0.14), transparent 24%),
+        linear-gradient(180deg, #f7f2ea 0%, #eee6db 100%);
+    }
+
+    body {
+      min-width: 0;
+      overflow-x: hidden;
+    }
+
+    button, input {
+      font: inherit;
+    }
+
+    input,
+    textarea,
+    select {
+      font-size: 16px;
+    }
+
+    button {
+      border: 0;
+      background: none;
+      cursor: pointer;
+    }
+
+    button:active,
+    .taskCard:active,
+    .pill:active {
+      transform: scale(0.985);
+    }
+
+    .app {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 10px 10px calc(22px + env(safe-area-inset-bottom));
+    }
+
+    .hero,
+    .panel,
+    .taskCard,
+    .sheet {
+      background: rgba(255, 253, 249, 0.95);
+      border: 1px solid rgba(184, 164, 138, 0.28);
+      box-shadow: var(--shadow);
+    }
+
+    .hero {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      padding: 12px;
+      border-radius: 0 0 var(--radius-xl) var(--radius-xl);
+      backdrop-filter: blur(10px);
+    }
+
+    .heroTop {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      justify-content: space-between;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      min-height: 28px;
+      align-items: center;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(31, 29, 26, 0.07);
+      color: #5f5a52;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    h1 {
+      margin: 8px 0 0;
+      font-size: clamp(30px, 9vw, 42px);
+      line-height: 1;
+      letter-spacing: -0.05em;
+    }
+
+    .heroText {
+      margin: 8px 0 0;
+      color: #564f47;
+      font-size: 14px;
+      line-height: 1.45;
+      font-weight: 700;
+      max-width: 460px;
+    }
+
+    .refreshBtn {
+      min-width: 94px;
+      min-height: var(--tap);
+      padding: 0 14px;
+      border-radius: 16px;
+      background: var(--surface-strong);
+      border: 1px solid var(--line);
+      color: var(--ink);
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    .heroMeta {
+      margin-top: 12px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .searchInput {
+      width: 100%;
+      min-height: 52px;
+      margin-top: 12px;
+      padding: 14px 16px;
+      border-radius: 16px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.95);
+      outline: none;
+    }
+
+    .banner {
+      display: none;
+      margin-top: 12px;
+      padding: 12px 14px;
+      border-radius: 14px;
+      font-size: 14px;
+      line-height: 1.45;
+      font-weight: 700;
+    }
+
+    .banner.show { display: block; }
+    .banner.success { background: var(--found-soft); color: var(--found); }
+    .banner.error { background: var(--missing-soft); color: var(--missing); }
+
+    .stack {
+      display: grid;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .panel {
+      border-radius: var(--radius-xl);
+      padding: 12px;
+    }
+
+    .side > .panel {
+      min-width: 0;
+    }
+
+    .sectionLabel {
+      margin: 0 0 10px;
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .pills {
+      display: flex;
+      gap: 10px;
+      overflow-x: auto;
+      padding-bottom: 2px;
+      scrollbar-width: none;
+    }
+
+    .pills::-webkit-scrollbar {
+      display: none;
+    }
+
+    .pill {
+      flex: 0 0 auto;
+      min-width: 104px;
+      min-height: 50px;
+      padding: 10px 12px;
+      border-radius: 16px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.94);
+      text-align: left;
+      color: var(--ink);
+      font-weight: 700;
+    }
+
+    .pill.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: white;
+    }
+
+    .pillCount {
+      display: block;
+      margin-top: 4px;
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 500;
+    }
+
+    .pill.active .pillCount {
+      color: rgba(255, 255, 255, 0.82);
+    }
+
+    .statsGrid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .stat {
+      padding: 14px;
+      border-radius: var(--radius-lg);
+      background: rgba(255, 255, 255, 0.88);
+      border: 1px solid var(--line);
+    }
+
+    .statValue {
+      font-size: 28px;
+      line-height: 1;
+      font-weight: 800;
+      letter-spacing: -0.05em;
+    }
+
+    .statLabel {
+      margin-top: 8px;
+      font-size: 11px;
+      line-height: 1.4;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-weight: 700;
+    }
+
+    .boardTitle {
+      margin: 0;
+      font-size: 24px;
+      line-height: 1.08;
+      letter-spacing: -0.04em;
+    }
+
+    .boardMeta {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .taskList {
+      display: grid;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .taskCard {
+      width: 100%;
+      text-align: left;
+      padding: 14px;
+      border-radius: 20px;
+      transition: opacity 160ms ease, transform 160ms ease, max-height 220ms ease, padding 220ms ease, margin 220ms ease, border-width 220ms ease;
+    }
+
+    .taskCard.closing {
+      opacity: 0;
+      transform: translateX(-12px) scale(0.98);
+      max-height: 0;
+      margin: 0;
+      padding-top: 0;
+      padding-bottom: 0;
+      border-width: 0;
+      overflow: hidden;
+    }
+
+    .taskTop {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .sticker {
+      margin: 0;
+      font-size: clamp(22px, 7vw, 30px);
+      line-height: 1.02;
+      font-weight: 800;
+      letter-spacing: -0.05em;
+      word-break: break-word;
+    }
+
+    .stickerLead { color: #5c6773; }
+    .stickerTail { color: #d29a25; }
+
+    .zoneChip {
+      min-height: 32px;
+      padding: 7px 10px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 800;
+      flex-shrink: 0;
+      display: inline-flex;
+      align-items: center;
+    }
+
+    .taskName {
+      margin-top: 10px;
+      font-size: 15px;
+      line-height: 1.45;
+      color: #26221d;
+      font-weight: 700;
+    }
+
+    .taskRoute {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.35;
+      font-weight: 700;
+    }
+
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .chip {
+      min-height: 31px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: #f3f5f8;
+      color: #324257;
+      font-size: 12px;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+    }
+
+    .chip.photo {
+      background: #e7f7ed;
+      color: var(--found);
+    }
+
+    .chip.time {
+      background: #fff0cf;
+      color: #8d5f09;
+    }
+
+    .empty {
+      padding: 18px 14px;
+      border-radius: 16px;
+      border: 1px dashed #d4c9b8;
+      background: rgba(255, 255, 255, 0.78);
+      color: var(--muted);
+      text-align: center;
+      line-height: 1.5;
+      font-size: 14px;
+    }
+
+    .modal {
+      position: fixed;
+      inset: 0;
+      display: none;
+      z-index: 50;
+      align-items: flex-end;
+      justify-content: center;
+      background: rgba(24, 20, 16, 0.32);
+    }
+
+    .modal.open {
+      display: flex;
+    }
+
+    .sheet {
+      width: 100%;
+      max-width: 760px;
+      max-height: 92vh;
+      overflow: auto;
+      border-radius: 24px 24px 0 0;
+      padding: 12px 12px calc(16px + env(safe-area-inset-bottom));
+    }
+
+    .sheetGrip {
+      width: 48px;
+      height: 5px;
+      margin: 2px auto 12px;
+      border-radius: 999px;
+      background: #d8d0c3;
+    }
+
+    .sheetHeader {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      justify-content: space-between;
+    }
+
+    .closeBtn {
+      width: 44px;
+      height: 44px;
+      flex-shrink: 0;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.96);
+      color: #46403a;
+      font-size: 24px;
+    }
+
+    .sheetMeta {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .detailGrid {
+      display: grid;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .detail {
+      padding: 12px;
+      border-radius: 16px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.92);
+    }
+
+    .detailLabel {
+      margin-bottom: 6px;
+      font-size: 11px;
+      color: var(--muted);
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .detailValue {
+      font-size: 14px;
+      line-height: 1.45;
+      font-weight: 700;
+      word-break: break-word;
+    }
+
+    .fieldLabel {
+      display: block;
+      margin-top: 14px;
+      margin-bottom: 6px;
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .fieldInput {
+      width: 100%;
+      min-height: 52px;
+      padding: 14px;
+      border-radius: 16px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.96);
+      outline: none;
+    }
+
+    .photoDrop {
+      position: relative;
+      min-height: 188px;
+      margin-top: 10px;
+      padding: 12px;
+      border-radius: 18px;
+      border: 1px dashed #d8d0c3;
+      background: rgba(255, 255, 255, 0.94);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      overflow: hidden;
+    }
+
+    .photoDrop.uploading {
+      opacity: 0.7;
+    }
+
+    .photoPreview {
+      max-width: 100%;
+      max-height: 320px;
+      object-fit: contain;
+      border-radius: 12px;
+      display: none;
+    }
+
+    .photoDrop.hasPhoto .photoPreview {
+      display: block;
+    }
+
+    .photoEmpty {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+      max-width: 320px;
+    }
+
+    .photoDrop.hasPhoto .photoEmpty {
+      display: none;
+    }
+
+    .photoStrip {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+      overflow-x: auto;
+      padding-bottom: 2px;
+    }
+
+    .photoThumb {
+      min-width: 76px;
+      height: 58px;
+      padding: 0 10px;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: #fff;
+      color: #304257;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .photoBtn {
+      width: 100%;
+      min-height: 48px;
+      margin-top: 10px;
+      border-radius: 16px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.96);
+      color: #304257;
+      font-size: 14px;
+      font-weight: 800;
+    }
+
+    .photoStatus {
+      min-height: 18px;
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .photoStatus.success { color: var(--found); }
+    .photoStatus.error { color: var(--missing); }
+
+    .sheetMsg {
+      display: none;
+      margin-top: 12px;
+      padding: 12px 14px;
+      border-radius: 14px;
+      font-size: 14px;
+      line-height: 1.45;
+      font-weight: 700;
+    }
+
+    .sheetMsg.show { display: block; }
+    .sheetMsg.info { background: var(--accent-soft); color: var(--accent); }
+    .sheetMsg.error { background: var(--missing-soft); color: var(--missing); }
+
+    .actions {
+      position: sticky;
+      bottom: 0;
+      display: grid;
+      gap: 10px;
+      margin-top: 14px;
+      padding-top: 10px;
+      background: linear-gradient(180deg, rgba(255, 253, 249, 0) 0%, rgba(255, 253, 249, 0.92) 16%, rgba(255, 253, 249, 1) 100%);
+    }
+
+    .actionBtn {
+      width: 100%;
+      min-height: 58px;
+      border-radius: 16px;
+      color: white;
+      font-size: 16px;
+      font-weight: 800;
+    }
+
+    .actionBtn.found { background: var(--found-gradient); }
+    .actionBtn.missing { background: var(--danger-gradient); }
+    .actionBtn.secondary { background: #2d2d2d; }
+
+    .photoViewer {
+      position: fixed;
+      inset: 0;
+      z-index: 70;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 14px;
+      background: rgba(15, 13, 10, 0.84);
+    }
+
+    .photoViewer.open {
+      display: flex;
+    }
+
+    .photoViewer img {
+      max-width: 100%;
+      max-height: 86vh;
+      object-fit: contain;
+      border-radius: 18px;
+      background: #fff;
+    }
+
+    .photoViewerClose {
+      position: fixed;
+      top: calc(12px + env(safe-area-inset-top));
+      right: 12px;
+      width: 48px;
+      height: 48px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.94);
+      color: #1f1d1a;
+      font-size: 26px;
+      font-weight: 800;
+    }
+
+    @media (max-width: 899px) {
+      html,
+      body {
+        background:
+          radial-gradient(circle at top right, rgba(15, 118, 110, 0.08), transparent 26%),
+          linear-gradient(180deg, #f6f1e8 0%, #eee6db 100%);
+      }
+
+      .app {
+        width: 100%;
+        max-width: none;
+        padding: 0 0 calc(18px + env(safe-area-inset-bottom));
+      }
+
+      .hero {
+        border-radius: 0 0 22px 22px;
+        padding: calc(10px + env(safe-area-inset-top)) 12px 12px;
+        box-shadow: 0 8px 28px rgba(42, 33, 22, 0.08);
+      }
+
+      .heroTop {
+        align-items: center;
+      }
+
+      .eyebrow {
+        min-height: 24px;
+        padding: 5px 8px;
+        font-size: 9px;
+        letter-spacing: 0.07em;
+      }
+
+      h1 {
+        margin-top: 5px;
+        font-size: 31px;
+        letter-spacing: -0.045em;
+      }
+
+      .heroText {
+        display: none;
+      }
+
+      .refreshBtn {
+        min-width: 88px;
+        min-height: 44px;
+        border-radius: 15px;
+        padding: 0 12px;
+        font-size: 14px;
+      }
+
+      .heroMeta {
+        margin-top: 8px;
+        font-size: 12px;
+        line-height: 1.35;
+      }
+
+      .searchInput {
+        min-height: 46px;
+        margin-top: 10px;
+        padding: 12px 14px;
+        border-radius: 15px;
+      }
+
+      .stack {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-top: 8px;
+        padding: 0 10px;
+      }
+
+      .side {
+        display: grid;
+        gap: 8px;
+      }
+
+      .panel {
+        border-radius: 20px;
+        padding: 10px;
+        box-shadow: 0 10px 26px rgba(60, 42, 17, 0.065);
+      }
+
+      .sectionLabel {
+        margin-bottom: 8px;
+        font-size: 10px;
+      }
+
+      .pills {
+        gap: 7px;
+      }
+
+      .pill {
+        min-width: 86px;
+        min-height: 45px;
+        padding: 8px 10px;
+        border-radius: 14px;
+        font-size: 14px;
+      }
+
+      .pillCount {
+        margin-top: 2px;
+        font-size: 10px;
+      }
+
+      .statsGrid {
+        gap: 7px;
+      }
+
+      .stat {
+        padding: 10px;
+        border-radius: 15px;
+      }
+
+      .statValue {
+        font-size: 24px;
+      }
+
+      .statLabel {
+        margin-top: 6px;
+        font-size: 9px;
+      }
+
+      .main .panel {
+        padding: 10px;
+      }
+
+      .boardTitle {
+        font-size: 22px;
+      }
+
+      .boardMeta {
+        margin-top: 5px;
+        font-size: 12px;
+      }
+
+      .taskList {
+        gap: 8px;
+        margin-top: 10px;
+      }
+
+      .taskCard {
+        min-height: 0;
+        padding: 12px;
+        border-radius: 18px;
+        box-shadow: 0 8px 22px rgba(60, 42, 17, 0.06);
+      }
+
+      .taskTop {
+        gap: 8px;
+      }
+
+      .sticker {
+        font-size: 23px;
+      }
+
+      .zoneChip {
+        min-height: 28px;
+        padding: 6px 9px;
+        font-size: 11px;
+      }
+
+      .taskName {
+        margin-top: 8px;
+        font-size: 16px;
+        line-height: 1.32;
+      }
+
+      .taskRoute {
+        margin-top: 7px;
+        font-size: 13px;
+        line-height: 1.3;
+      }
+
+      .chips {
+        gap: 5px;
+        margin-top: 9px;
+      }
+
+      .chip {
+        min-height: 27px;
+        padding: 5px 8px;
+        font-size: 10px;
+      }
+
+      .modal {
+        align-items: stretch;
+        background: rgba(24, 20, 16, 0.22);
+      }
+
+      .sheet {
+        max-width: none;
+        max-height: none;
+        height: 100dvh;
+        border-radius: 0;
+        padding: calc(8px + env(safe-area-inset-top)) 10px calc(12px + env(safe-area-inset-bottom));
+        box-shadow: none;
+      }
+
+      .sheetGrip {
+        display: none;
+      }
+
+      .sheetHeader {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        margin: -4px -2px 0;
+        padding: 4px 2px 8px;
+        background: linear-gradient(180deg, rgba(255, 253, 249, 1) 0%, rgba(255, 253, 249, 0.94) 100%);
+      }
+
+      .closeBtn {
+        width: 42px;
+        height: 42px;
+        border-radius: 14px;
+      }
+
+      .sheetMeta {
+        margin-top: 6px;
+        font-size: 12px;
+      }
+
+      .detailGrid {
+        gap: 7px;
+        margin-top: 10px;
+      }
+
+      .detail {
+        padding: 10px;
+        border-radius: 14px;
+      }
+
+      .detailLabel {
+        font-size: 10px;
+      }
+
+      .detailValue {
+        font-size: 14px;
+      }
+
+      .fieldLabel {
+        margin-top: 10px;
+        font-size: 10px;
+      }
+
+      .fieldInput {
+        min-height: 48px;
+        padding: 12px;
+        border-radius: 14px;
+      }
+
+      .photoDrop {
+        min-height: 150px;
+        border-radius: 16px;
+      }
+
+      .photoPreview {
+        max-height: 240px;
+      }
+
+      .actions {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+        margin-left: -10px;
+        margin-right: -10px;
+        margin-bottom: -12px;
+        padding: 12px 10px calc(12px + env(safe-area-inset-bottom));
+        background: linear-gradient(180deg, rgba(255, 253, 249, 0) 0%, rgba(255, 253, 249, 0.96) 18%, rgba(255, 253, 249, 1) 100%);
+      }
+
+      .actionBtn {
+        min-height: 58px;
+        border-radius: 17px;
+        font-size: 16px;
+      }
+
+      .actionBtn.found::before {
+        content: '✓ ';
+      }
+
+      .actionBtn.missing::before {
+        content: '× ';
+      }
+
+      .actionBtn.secondary {
+        grid-column: 1 / -1;
+        min-height: 46px;
+        opacity: 0.9;
+      }
+    }
+
+    @media (max-width: 639px) {
+      html,
+      body {
+        background: #f3ede3;
+      }
+
+      .app {
+        max-width: none;
+        padding: 0 0 calc(88px + env(safe-area-inset-bottom));
+      }
+
+      .hero {
+        position: sticky;
+        top: 0;
+        border-width: 0 0 1px;
+        border-radius: 0 0 18px 18px;
+        padding: calc(8px + env(safe-area-inset-top)) 10px 10px;
+      }
+
+      .heroTop {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 10px;
+      }
+
+      .eyebrow,
+      .heroText {
+        display: none;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 28px;
+        line-height: 1;
+      }
+
+      .refreshBtn {
+        min-width: 88px;
+        min-height: 42px;
+        border-radius: 14px;
+        font-size: 14px;
+      }
+
+      .heroMeta {
+        margin-top: 6px;
+        max-width: 100%;
+        overflow: hidden;
+        color: #6b6258;
+        font-size: 12px;
+        line-height: 1.25;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .searchInput {
+        min-height: 44px;
+        margin-top: 9px;
+        padding: 11px 13px;
+        border-radius: 14px;
+      }
+
+      .stack {
+        gap: 8px;
+        padding: 8px;
+      }
+
+      .side {
+        gap: 8px;
+      }
+
+      .side .panel {
+        padding: 8px;
+      }
+
+      .side .panel:nth-child(3) {
+        display: none;
+      }
+
+      .sectionLabel {
+        margin-bottom: 7px;
+        font-size: 10px;
+      }
+
+      .pills {
+        display: grid;
+        grid-auto-flow: column;
+        grid-auto-columns: minmax(92px, 1fr);
+        gap: 6px;
+        overflow-x: auto;
+        padding-bottom: 1px;
+        scroll-snap-type: x proximity;
+      }
+
+      .pill {
+        min-width: 0;
+        min-height: 48px;
+        padding: 8px 10px;
+        border-radius: 14px;
+        scroll-snap-align: start;
+      }
+
+      .pill strong {
+        font-size: 15px;
+      }
+
+      .pillCount {
+        font-size: 10px;
+      }
+
+      .main .panel {
+        border-radius: 18px;
+        padding: 10px;
+      }
+
+      .boardTitle {
+        font-size: 21px;
+      }
+
+      .boardMeta {
+        font-size: 12px;
+      }
+
+      .taskList {
+        gap: 8px;
+      }
+
+      .taskCard {
+        padding: 12px;
+        border-radius: 17px;
+      }
+
+      .taskTop {
+        align-items: flex-start;
+      }
+
+      .sticker {
+        font-size: 22px;
+      }
+
+      .taskName {
+        font-size: 15px;
+        line-height: 1.3;
+      }
+
+      .chips {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 5px;
+      }
+
+      .chip {
+        justify-content: center;
+        min-height: 28px;
+        padding: 5px 7px;
+        overflow: hidden;
+        font-size: 10px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .taskRoute {
+        display: none;
+      }
+
+      .sheet {
+        display: flex;
+        flex-direction: column;
+        height: 100dvh;
+        overflow: hidden;
+      }
+
+      .sheetHeader,
+      .detailGrid,
+      .fieldLabel,
+      .fieldInput,
+      .photoDrop,
+      .photoStrip,
+      .photoBtn,
+      .photoStatus,
+      .sheetMsg {
+        flex: 0 0 auto;
+      }
+
+      .detailGrid {
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        padding-bottom: 4px;
+      }
+
+      .sheet .chips {
+        display: flex;
+        overflow-x: auto;
+        flex-wrap: nowrap;
+        padding-bottom: 2px;
+      }
+
+      .sheet .chip {
+        flex: 0 0 auto;
+      }
+
+      .photoDrop {
+        min-height: 128px;
+      }
+
+      .actions {
+        position: sticky;
+        bottom: 0;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        margin-top: auto;
+      }
+    }
+
+    @media (min-width: 640px) and (max-width: 899px) {
+      .app {
+        max-width: 760px;
+        margin: 0 auto;
+        padding: 12px 14px calc(22px + env(safe-area-inset-bottom));
+      }
+
+      .hero,
+      .panel,
+      .taskCard {
+        border-radius: 24px;
+      }
+
+      .stack {
+        padding: 0;
+        display: grid;
+        grid-template-columns: 260px minmax(0, 1fr);
+        align-items: start;
+      }
+
+      .side {
+        position: sticky;
+        top: 104px;
+      }
+
+      .sheet {
+        height: auto;
+        max-height: 92vh;
+        max-width: 720px;
+        margin: auto;
+        border-radius: 24px;
+        padding: 14px 14px calc(16px + env(safe-area-inset-bottom));
+      }
+
+      .sheetGrip {
+        display: block;
+      }
+
+      .modal {
+        align-items: flex-end;
+      }
+    }
+
+    @media (min-width: 900px) {
+      .app {
+        max-width: 1180px;
+        padding: 18px 18px 24px;
+      }
+
+      .stack {
+        grid-template-columns: 280px minmax(0, 1fr);
+        align-items: start;
+      }
+
+      .side {
+        display: grid;
+        gap: 12px;
+        position: sticky;
+        top: 104px;
+      }
+
+      .main {
+        display: grid;
+        gap: 12px;
+      }
+
+      .hero {
+        border-radius: 28px;
+      }
+
+      .taskList {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .sheet {
+        border-radius: 24px;
+        margin: auto;
+        padding: 16px;
+      }
+
+      .sheetGrip {
+        display: none;
+      }
+    }
+</style>
+
+</head>
+<body>
+  <div class="app">
+    <header class="hero">
+      <div class="heroTop">
+        <div>
+          <span class="eyebrow">Мобильный поиск товаров</span>
+          <h1>Поиск</h1>
+          <div class="heroText">Открой карточку, проверь MX/BOX и отметь результат.</div>
+        </div>
+        <button class="refreshBtn" id="refreshBtn" type="button">Обновить</button>
+      </div>
+      <div class="heroMeta" id="heroMeta">Загрузка задач...</div>
+      <input class="searchInput" id="searchInput" type="search" placeholder="Поиск по стикеру, MX, названию, BOX">
+      <div class="banner" id="banner"></div>
+    </header>
+
+    <div class="stack">
+      <div class="side">
+        <section class="panel">
+          <p class="sectionLabel">Блоки</p>
+          <div class="pills" id="zonePills"></div>
+        </section>
+
+        <section class="panel">
+          <p class="sectionLabel">Этажи</p>
+          <div class="pills" id="floorPills"></div>
+        </section>
+
+        <section class="panel">
+          <p class="sectionLabel">Сейчас в работе</p>
+          <div class="statsGrid">
+            <div class="stat">
+              <div class="statValue" id="statTasks">0</div>
+              <div class="statLabel">Задач</div>
+            </div>
+            <div class="stat">
+              <div class="statValue" id="statFloors">0</div>
+              <div class="statLabel">Этажей</div>
+            </div>
+            <div class="stat">
+              <div class="statValue" id="statPhotos">0</div>
+              <div class="statLabel">С фото</div>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <main class="main">
+        <section class="panel">
+          <h2 class="boardTitle" id="boardTitle">Актуальные задания</h2>
+          <div class="boardMeta" id="boardMeta">Подготовка списка...</div>
+          <div class="taskList" id="taskList"></div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <div class="modal" id="modal">
+    <div class="sheet">
+      <div class="sheetGrip"></div>
+      <div class="sheetHeader">
+        <div>
+          <div class="sticker" id="sheetSticker"></div>
+          <div class="taskName" id="sheetName" style="margin-top:8px;"></div>
+          <div class="sheetMeta" id="sheetMeta"></div>
+        </div>
+        <button class="closeBtn" id="closeBtn" type="button" aria-label="Закрыть">×</button>
+      </div>
+
+      <div class="chips" id="sheetChips"></div>
+
+      <div class="detailGrid" id="sheetDetails"></div>
+
+      <label class="fieldLabel" for="employeeInput">ID сотрудника</label>
+      <input class="fieldInput" id="employeeInput" type="text" placeholder="Введите ID сотрудника">
+
+      <label class="fieldLabel" for="photoInput">Фото товара</label>
+      <div class="photoDrop" id="photoDrop" tabindex="0" role="button" aria-label="Добавить фото товара">
+        <img class="photoPreview" id="photoPreview" alt="Фото товара">
+        <div class="photoEmpty" id="photoEmpty">Фото пока не добавлено. Нажмите сюда, выберите файл или вставьте скриншот.</div>
+      </div>
+      <div class="photoStrip" id="photoStrip"></div>
+      <input id="photoInput" type="file" accept="image/*" hidden>
+      <button class="photoBtn" id="photoBtn" type="button">Выбрать фото</button>
+      <div class="photoStatus" id="photoStatus"></div>
+
+      <div class="sheetMsg" id="sheetMsg"></div>
+
+      <div class="actions">
+        <button class="actionBtn found" id="foundBtn" type="button">Найдено</button>
+        <button class="actionBtn missing" id="missingBtn" type="button">Не найдено</button>
+        <button class="actionBtn secondary" id="sheetCloseBtn" type="button">Закрыть</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="photoViewer" id="photoViewer" aria-hidden="true">
+    <button class="photoViewerClose" id="photoViewerClose" type="button" aria-label="Закрыть фото">×</button>
+    <img id="photoViewerImg" alt="Фото товара крупно">
+  </div>
+
+  <script>
+/* A retry verifies the SAME operation. It never sends another status write. */
+var pendingStatusOperations_ = {};
+function runStatusOperation_(payload, saved, failed, checking) {
+  var key = 'status-operation:' + payload.sheetName + ':' + payload.rowNumber + ':' + payload.wbSticker + ':' + payload.mx;
+  var pending = pendingStatusOperations_[key];
+  try { pending = pending || JSON.parse(localStorage.getItem(key) || 'null'); } catch (ignored) {}
+  var recovering = !!pending;
+  if (pending) payload = pending;
+  pendingStatusOperations_[key] = payload;
+  try { localStorage.setItem(key, JSON.stringify(payload)); } catch (ignored) {}
+  var startedAt = Date.now();
+  var settled = false, verifying = false, attempts = 0;
+  var timer = setTimeout(verify, 30000);
+  var deadline = setTimeout(function() { fail('Не удалось подтвердить сохранение. Повторное нажатие проверит ту же операцию.'); }, 120000);
+  function forget() {
+    if (pendingStatusOperations_[key] && pendingStatusOperations_[key].requestId === payload.requestId) {
+      delete pendingStatusOperations_[key];
+    }
+    try {
+      var stored = JSON.parse(localStorage.getItem(key) || 'null');
+      if (stored && stored.requestId === payload.requestId) localStorage.removeItem(key);
+    } catch (ignored) {}
+  }
+  function done(result) {
+    if (settled) return;
+    if (!result || result.ok !== true || result.requestId !== payload.requestId) { verify(); return; }
+    settled = true; clearTimeout(timer); clearTimeout(deadline);
+    forget();
+    saved(result);
+  }
+  function fail(message) {
+    if (settled) return;
+    settled = true; clearTimeout(timer); clearTimeout(deadline);
+    failed(new Error(message), payload.requestId);
+  }
+  function retry() {
+    verifying = false;
+    if (settled) return;
+    if (attempts < 6) {
+      var delay = Math.min(10000, 1000 * Math.pow(2, attempts));
+      // The last probe can fence an absent operation after its queueing grace.
+      if (attempts === 5) delay = Math.max(delay, 90000 - (Date.now() - startedAt));
+      timer = setTimeout(verify, delay);
+    }
+    else fail('Результат пока не подтверждён. Данные операции сохранены; повторное нажатие проверит результат.');
+  }
+  function verify() {
+    if (settled || verifying) return;
+    clearTimeout(timer); verifying = true; attempts++;
+    if (checking) checking();
+    google.script.run.withSuccessHandler(function(check) {
+      if (settled) return;
+      if (check && check.confirmed) done(check.result);
+      else if(check && check.aborted && check.requestId === payload.requestId) {
+        forget();
+        fail('Сервер отклонил запись; статус не изменён. Повторите действие.');
+      }
+      else retry();
+    }).withFailureHandler(retry).getTaskUpdateResult(payload, Date.now() - startedAt < 90000);
+  }
+  if (recovering) verify();
+  else google.script.run.withSuccessHandler(done).withFailureHandler(function(error) {
+    if (settled) return;
+    var message = String(error && error.message || error);
+    if (message.indexOf('STATUS_NOT_STARTED:') !== -1 || message.indexOf('Тайм-аут блокировки:') !== -1) {
+      forget();
+      fail(message.replace('STATUS_NOT_STARTED: ', ''));
+    } else verify();
+  }).updateTask(payload);
+}
+</script>
+
+  <script>
+const EMPLOYEE_CACHE_KEY = 'warehouse_employee_id_v3';
+    const EMPLOYEE_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
+    const AUTO_REFRESH_MS = 120000;
+
+    let allTasks = [];
+    let zoneStats = {};
+    let selectedZone = 'B4';
+    let selectedFloor = '';
+    let selectedTaskKey = '';
+    let isLoading = false;
+    let isSaving = false;
+    let isUploadingPhoto = false;
+    let generatedAt = '';
+    let photoLoadSequence = 0;
+    let loadSequence = 0;
+    let activePhotoDataUrl = '';
+
+    const refreshBtn = document.getElementById('refreshBtn');
+    const searchInput = document.getElementById('searchInput');
+    const heroMeta = document.getElementById('heroMeta');
+    const banner = document.getElementById('banner');
+    const zonePills = document.getElementById('zonePills');
+    const floorPills = document.getElementById('floorPills');
+    const statTasks = document.getElementById('statTasks');
+    const statFloors = document.getElementById('statFloors');
+    const statPhotos = document.getElementById('statPhotos');
+    const boardTitle = document.getElementById('boardTitle');
+    const boardMeta = document.getElementById('boardMeta');
+    const taskList = document.getElementById('taskList');
+    const modal = document.getElementById('modal');
+    const closeBtn = document.getElementById('closeBtn');
+    const sheetCloseBtn = document.getElementById('sheetCloseBtn');
+    const sheetSticker = document.getElementById('sheetSticker');
+    const sheetName = document.getElementById('sheetName');
+    const sheetMeta = document.getElementById('sheetMeta');
+    const sheetChips = document.getElementById('sheetChips');
+    const sheetDetails = document.getElementById('sheetDetails');
+    const employeeInput = document.getElementById('employeeInput');
+    const sheetMsg = document.getElementById('sheetMsg');
+    const foundBtn = document.getElementById('foundBtn');
+    const missingBtn = document.getElementById('missingBtn');
+    const photoDrop = document.getElementById('photoDrop');
+    const photoInput = document.getElementById('photoInput');
+    const photoBtn = document.getElementById('photoBtn');
+    const photoPreview = document.getElementById('photoPreview');
+    const photoEmpty = document.getElementById('photoEmpty');
+    const photoStatus = document.getElementById('photoStatus');
+    const photoStrip = document.getElementById('photoStrip');
+    const photoViewer = document.getElementById('photoViewer');
+    const photoViewerImg = document.getElementById('photoViewerImg');
+    const photoViewerClose = document.getElementById('photoViewerClose');
+
+    function loadTasks(silent) {
+      if (isLoading) return;
+      const requestId = ++loadSequence;
+      isLoading = true;
+      refreshBtn.disabled = true;
+      if (!silent) {
+        heroMeta.textContent = 'Загрузка задач...';
+      }
+
+      window.setTimeout(function() {
+        if (requestId !== loadSequence || !isLoading) return;
+        heroMeta.textContent = 'Таблица отвечает дольше обычного. Жду данные...';
+      }, 15000);
+
+      const deadline = window.setTimeout(function() {
+        if (requestId !== loadSequence || !isLoading) return;
+        loadSequence++;
+        isLoading = false;
+        refreshBtn.disabled = false;
+        heroMeta.textContent = 'Нет ответа на загрузку. Предыдущий список сохранён.';
+        showBanner(heroMeta.textContent, 'error');
+      }, 120000);
+
+      google.script.run
+        .withSuccessHandler(function(data) {
+          if (requestId !== loadSequence) return;
+          window.clearTimeout(deadline);
+          isLoading = false;
+          refreshBtn.disabled = false;
+          if (!data || !Array.isArray(data.tasks) || data.count !== data.tasks.length) {
+            heroMeta.textContent = 'Ошибка загрузки. Предыдущий список сохранён.';
+            showBanner(heroMeta.textContent, 'error');
+            return;
+          }
+          allTasks = data.tasks;
+          zoneStats = data.zoneStats || {};
+          generatedAt = data.generatedAt || '';
+          preserveSelection();
+          render();
+        })
+        .withFailureHandler(function(error) {
+          if (requestId !== loadSequence) return;
+          window.clearTimeout(deadline);
+          refreshBtn.disabled = false;
+          isLoading = false;
+          heroMeta.textContent = getErrorMessage(error);
+          showBanner(getErrorMessage(error), 'error');
+        })
+        .getTasks('classic-' + Date.now() + '-' + requestId);
+    }
+
+    function preserveSelection() {
+      const zones = getZones();
+      if (zones.indexOf(selectedZone) === -1) {
+        selectedZone = zones[0] || 'B4';
+      }
+
+      const floors = getFloors(selectedZone);
+      if (floors.indexOf(selectedFloor) === -1) {
+        selectedFloor = floors[0] || '';
+      }
+    }
+
+    function render() {
+      renderHeroMeta();
+      renderZones();
+      renderFloors();
+      renderStats();
+      renderTasks();
+      syncOpenModal();
+    }
+
+    function renderHeroMeta() {
+      const stamp = generatedAt ? formatDateTime(generatedAt) : 'нет данных';
+      heroMeta.textContent = 'Показываются только активные задания • обновлено: ' + stamp;
+    }
+
+    function renderZones() {
+      const zones = getZones();
+      zonePills.innerHTML = zones.map(function(zone) {
+        const stat = zoneStats[zone] || { total: 0 };
+        return [
+          '<button class="pill',
+          selectedZone === zone ? ' active' : '',
+          '" type="button" data-zone="', safeAttr(zone), '">',
+          safe(zone),
+          '<span class="pillCount">', String(stat.total || 0), ' задач</span>',
+          '</button>'
+        ].join('');
+      }).join('');
+    }
+
+    function renderFloors() {
+      const floors = getFloors(selectedZone);
+      if (!floors.length) {
+        floorPills.innerHTML = '<div class="empty">В этом блоке нет актуальных активных строк.</div>';
+        return;
+      }
+
+      floorPills.innerHTML = floors.map(function(floor) {
+        const count = allTasks.filter(function(task) {
+          return task.zone === selectedZone && getFloorLabel(task.floor) === floor;
+        }).length;
+
+        return [
+          '<button class="pill',
+          selectedFloor === floor ? ' active' : '',
+          '" type="button" data-floor="', safeAttr(floor), '">',
+          safe(floor === 'Без этажа' ? floor : 'Этаж ' + floor),
+          '<span class="pillCount">', String(count), ' задач</span>',
+          '</button>'
+        ].join('');
+      }).join('');
+    }
+
+    function renderStats() {
+      const stat = zoneStats[selectedZone] || { total: 0, floors: {}, photos: 0 };
+      statTasks.textContent = String(stat.total || 0);
+      statFloors.textContent = String(Object.keys(stat.floors || {}).length);
+      statPhotos.textContent = String(stat.photos || 0);
+    }
+
+    function renderTasks() {
+      const list = getFilteredTasks();
+      boardTitle.textContent = selectedZone ? 'Задания ' + selectedZone : 'Задания';
+      boardMeta.textContent = list.length
+        ? 'В текущем фильтре ' + list.length + ' карточек.'
+        : 'По текущему фильтру карточек нет.';
+
+      if (!list.length) {
+        taskList.innerHTML = '<div class="empty">Нет активных заданий для выбранного блока, этажа и поиска.</div>';
+        return;
+      }
+
+      taskList.innerHTML = list.map(function(task) {
+        const taskKey = getTaskKey(task);
+        return [
+          '<button class="taskCard" type="button" data-key="', safeAttr(taskKey), '" data-sheet="', safeAttr(task.sheetName), '" data-row="', String(task.rowNumber), '">',
+          '<div class="taskTop">',
+          '<div class="sticker">', buildStickerMarkup(task.wbSticker), '</div>',
+          '<div class="zoneChip">', safe(task.zone || ''), '</div>',
+          '</div>',
+          '<div class="taskName">', safe(task.itemName || 'Без наименования'), '</div>',
+          '<div class="chips">',
+          '<span class="chip">MX: ', safe(task.mx || '—'), '</span>',
+          '<span class="chip">BOX: ', safe(task.box || '—'), '</span>',
+          '<span class="chip">Этаж ', safe(task.floor || '—'), '</span>',
+          '<span class="chip">Ряд ', safe(task.row || '—'), '</span>',
+          task.action ? '<span class="chip">' + safe(task.action) + '</span>' : '',
+          task.manualTime ? '<span class="chip time">Время ' + safe(task.manualTime) + '</span>' : '',
+          task.hasPhoto ? '<span class="chip photo">Фото ' + safe(String(task.photoCount || 1)) + '</span>' : '',
+          '</div>',
+          '<div class="taskRoute">', safe(buildRouteText(task)), '</div>',
+          '</button>'
+        ].join('');
+      }).join('');
+    }
+
+    function openTask(sheetNameValue, rowNumberValue) {
+      const task = allTasks.find(function(item) {
+        return item.sheetName === sheetNameValue && item.rowNumber === rowNumberValue;
+      });
+      if (!task) return;
+
+      selectedTaskKey = getTaskKey(task);
+      employeeInput.value = getSavedEmployeeId();
+
+      sheetSticker.innerHTML = buildStickerMarkup(task.wbSticker);
+      sheetName.textContent = task.itemName || '';
+      sheetMeta.textContent = buildModalMeta(task);
+      sheetChips.innerHTML = buildTaskChipsMarkup(task);
+      sheetDetails.innerHTML = buildDetailMarkup(task);
+      resetPhotoPreview(task.hasPhoto ? 'Загружаю фото...' : 'Фото пока не добавлено.');
+      renderPhotoStrip(task);
+      setSheetMessage('', '');
+
+      if (task.hasPhoto && task.photoFileId) {
+        loadTaskPhoto(task, task.photoFileId);
+      } else {
+        setPhotoStatus('Фото пока не добавлено.', '');
+      }
+
+      setBusyState(false);
+      modal.classList.add('open');
+    }
+
+    function syncOpenModal() {
+      if (!modal.classList.contains('open') || !selectedTaskKey) return;
+      const task = findTaskByKey(selectedTaskKey);
+      if (!task) {
+        setSheetMessage('Задание уже исчезло из активного списка. Обновите страницу.', 'error');
+        return;
+      }
+      if (!isSaving && !isUploadingPhoto) {
+        const draft = employeeInput.value;
+        openTask(task.sheetName, task.rowNumber);
+        employeeInput.value = draft;
+      }
+    }
+
+    function sendStatus(action) {
+      if (isSaving || isUploadingPhoto) return;
+
+      const task = findTaskByKey(selectedTaskKey);
+      if (!task) {
+        setSheetMessage('Задание уже неактуально. Обновите список.', 'error');
+        return;
+      }
+
+      const employeeId = employeeInput.value.trim();
+      if (!employeeId) {
+        setSheetMessage('Сначала укажите ID сотрудника.', 'error');
+        employeeInput.focus();
+        return;
+      }
+
+      saveEmployeeId(employeeId);
+      setSheetMessage('Сохраняю...', 'info');
+      setBusyState(true, action);
+
+      const operation = {
+        requestId: 'status-' + Date.now() + '-' + Math.random().toString(36).slice(2, 9),
+        sheetName: task.sheetName, rowNumber: task.rowNumber,
+        wbSticker: task.wbSticker, mx: task.mx, newStatus: action, employeeId: employeeId
+      };
+
+      runStatusOperation_(operation, function(response) {
+          showBanner(response && response.message ? response.message : 'Сохранено.', 'success');
+          removeTaskCardFromDom(task);
+          removeTaskLocally(task);
+          closeModal(true);
+          render();
+          window.setTimeout(function() {
+            loadTasks(true);
+          }, 250);
+        }, function(error) {
+          setBusyState(false);
+          setSheetMessage(getErrorMessage(error), 'error');
+        }, function() { setSheetMessage('Проверяю результат сохранения...', 'info'); });
+    }
+
+    function loadTaskPhoto(task, fileId) {
+      const requestId = ++photoLoadSequence;
+      setPhotoStatus('Загружаю фото...', '');
+
+      google.script.run
+        .withSuccessHandler(function(data) {
+          if (requestId !== photoLoadSequence) return;
+          if (!modal.classList.contains('open') || selectedTaskKey !== getTaskKey(task)) return;
+          setPhotoPreview('data:' + data.mimeType + ';base64,' + data.base64);
+          setPhotoStatus('Фото загружено.', 'success');
+        })
+        .withFailureHandler(function(error) {
+          if (requestId !== photoLoadSequence) return;
+          resetPhotoPreview('Не удалось загрузить фото. Можно прикрепить его заново.');
+          setPhotoStatus(getErrorMessage(error), 'error');
+        })
+        .getTaskPhotoData({
+          sheetName: task.sheetName,
+          rowNumber: task.rowNumber,
+          fileId: fileId || task.photoFileId
+        });
+    }
+
+    function choosePhoto() {
+      if (isSaving || isUploadingPhoto) return;
+      photoInput.click();
+    }
+
+    function handlePhotoFile(file) {
+      if (!file) return;
+      const task = findTaskByKey(selectedTaskKey);
+      if (!task) return;
+
+      if (!/^image\//i.test(file.type || '')) {
+        setPhotoStatus('Нужен файл изображения.', 'error');
+        return;
+      }
+
+      const employeeId = employeeInput.value.trim();
+      if (!employeeId) {
+        setPhotoStatus('Сначала укажите ID сотрудника.', 'error');
+        employeeInput.focus();
+        return;
+      }
+
+      saveEmployeeId(employeeId);
+      const reader = new FileReader();
+      setUploadingState(true);
+      setPhotoStatus('Подготавливаю фото...', '');
+
+      reader.onload = function() {
+        const dataUrl = String(reader.result || '');
+        if (!dataUrl) {
+          setUploadingState(false);
+          setPhotoStatus('Не удалось прочитать файл.', 'error');
+          return;
+        }
+
+        setPhotoPreview(dataUrl);
+        setPhotoStatus('Загружаю фото...', '');
+
+        google.script.run
+          .withSuccessHandler(function(result) {
+            setUploadingState(false);
+            task.photoFileId = result.fileId;
+            task.photoFileIds = Array.isArray(result.fileIds) ? result.fileIds : [result.fileId];
+            task.photoCount = Number(result.photoCount || task.photoFileIds.length || 1);
+            task.hasPhoto = true;
+            sheetChips.innerHTML = buildTaskChipsMarkup(task);
+            renderPhotoStrip(task);
+            renderTasks();
+            setPhotoStatus('Фото сохранено.', 'success');
+            showBanner('Фото сохранено.', 'success');
+          })
+          .withFailureHandler(function(error) {
+            setUploadingState(false);
+            setPhotoStatus(getErrorMessage(error), 'error');
+          })
+          .uploadTaskPhoto({
+            sheetName: task.sheetName,
+            rowNumber: task.rowNumber,
+            wbSticker: task.wbSticker,
+            mx: task.mx,
+            employeeId: employeeId,
+            fileName: file.name || ('task-photo-' + Date.now() + '.png'),
+            mimeType: file.type || 'image/png',
+            dataUrl: dataUrl
+          });
+      };
+
+      reader.onerror = function() {
+        setUploadingState(false);
+        setPhotoStatus('Не удалось прочитать файл.', 'error');
+      };
+
+      reader.readAsDataURL(file);
+    }
+
+    function setBusyState(value, action) {
+      isSaving = value;
+      foundBtn.disabled = value;
+      missingBtn.disabled = value;
+      refreshBtn.disabled = value || isLoading;
+      closeBtn.disabled = value || isUploadingPhoto;
+      sheetCloseBtn.disabled = value || isUploadingPhoto;
+
+      foundBtn.textContent = value && action === 'Найдено' ? 'Сохраняю...' : 'Найдено';
+      missingBtn.textContent = value && action === 'Не найдено' ? 'Сохраняю...' : 'Не найдено';
+    }
+
+    function setUploadingState(value) {
+      isUploadingPhoto = value;
+      photoDrop.classList.toggle('uploading', value);
+      photoBtn.disabled = value || isSaving;
+      photoInput.disabled = value || isSaving;
+      closeBtn.disabled = value || isSaving;
+      sheetCloseBtn.disabled = value || isSaving;
+    }
+
+    function setPhotoPreview(dataUrl) {
+      if (!dataUrl) {
+        resetPhotoPreview('Фото пока не добавлено.');
+        return;
+      }
+      photoPreview.src = dataUrl;
+      activePhotoDataUrl = dataUrl;
+      photoDrop.classList.add('hasPhoto');
+    }
+
+    function resetPhotoPreview(text) {
+      photoPreview.removeAttribute('src');
+      activePhotoDataUrl = '';
+      photoDrop.classList.remove('hasPhoto');
+      photoEmpty.textContent = text || 'Фото пока не добавлено.';
+    }
+
+    function setPhotoStatus(text, type) {
+      photoStatus.className = 'photoStatus' + (type ? ' ' + type : '');
+      photoStatus.textContent = text || '';
+    }
+
+    function setSheetMessage(text, type) {
+      if (!text) {
+        sheetMsg.className = 'sheetMsg';
+        sheetMsg.textContent = '';
+        return;
+      }
+      sheetMsg.className = 'sheetMsg show ' + (type || 'info');
+      sheetMsg.textContent = text;
+    }
+
+    function closeModal(force) {
+      if ((isSaving || isUploadingPhoto) && !force) return;
+      modal.classList.remove('open');
+      selectedTaskKey = '';
+      setBusyState(false);
+      setUploadingState(false);
+      setSheetMessage('', '');
+      resetPhotoPreview('Фото пока не добавлено.');
+      setPhotoStatus('', '');
+      photoStrip.innerHTML = '';
+    }
+
+    function getZones() {
+      const available = Object.keys(zoneStats || {}).filter(function(zone) {
+        return (zoneStats[zone] && zoneStats[zone].total) > 0;
+      });
+      return available.length ? available : ['B3', 'B4', 'B5'];
+    }
+
+    function getFloors(zone) {
+      return unique(allTasks.filter(function(task) {
+        return task.zone === zone;
+      }).map(function(task) {
+        return getFloorLabel(task.floor);
+      })).sort(compareFloorLabels);
+    }
+
+    function getFilteredTasks() {
+      const query = searchInput.value.trim().toLowerCase();
+      return allTasks.filter(function(task) {
+        if (task.zone !== selectedZone) return false;
+        if (selectedFloor && getFloorLabel(task.floor) !== selectedFloor) return false;
+        if (!query) return true;
+        return buildSearchText(task).indexOf(query) !== -1;
+      });
+    }
+
+    function buildSearchText(task) {
+      return [
+        task.wbSticker,
+        task.itemName,
+        task.mx,
+        task.box,
+        task.floor,
+        task.row,
+        task.place,
+        task.shelf,
+        task.cell,
+        task.action
+      ].join(' ').toLowerCase();
+    }
+
+    function buildModalMeta(task) {
+      const parts = ['Блок ' + (task.zone || '—')];
+      if (task.createdAt) parts.push('дата ' + task.createdAt);
+      if (task.manualTime) parts.push('ручное время ' + task.manualTime);
+      return parts.join(' • ');
+    }
+
+    function buildTaskChipsMarkup(task) {
+      return [
+        '<span class="chip">MX: ' + safe(task.mx || '—') + '</span>',
+        '<span class="chip">BOX: ' + safe(task.box || '—') + '</span>',
+        '<span class="chip">Этаж ' + safe(task.floor || '—') + '</span>',
+        '<span class="chip">Ряд ' + safe(task.row || '—') + '</span>',
+        task.action ? '<span class="chip">' + safe(task.action) + '</span>' : '',
+        task.manualTime ? '<span class="chip time">Время ' + safe(task.manualTime) + '</span>' : '',
+        task.hasPhoto ? '<span class="chip photo">Фото ' + safe(String(task.photoCount || 1)) + '</span>' : ''
+      ].join('');
+    }
+
+    function buildDetailMarkup(task) {
+      const items = [
+        detailItem('Маршрут', buildRouteText(task)),
+        detailItem('Наименование', task.itemName || 'Без наименования'),
+        detailItem('ВБ стикер', task.wbSticker || '—'),
+        detailItem('Ручное время', task.manualTime || '—'),
+        detailItem('Дата выгрузки', task.createdAt || '—'),
+        detailItem('ID сборщика', task.pickerId || '—'),
+        detailItem('Статус товара', task.itemStatus || '—'),
+        detailItem('Источник', task.sourceLabel || '—')
+      ];
+
+      return items.join('');
+    }
+
+    function detailItem(label, value) {
+      return '<div class="detail"><div class="detailLabel">' + safe(label) + '</div><div class="detailValue">' + safe(value) + '</div></div>';
+    }
+
+    function buildRouteText(task) {
+      const parts = [];
+      if (task.floor) parts.push('Этаж ' + task.floor);
+      if (task.row) parts.push('Ряд ' + task.row);
+      if (task.place) parts.push('Место ' + task.place);
+      if (task.shelf) parts.push('Полка ' + task.shelf);
+      if (task.cell) parts.push('Ячейка ' + task.cell);
+      return parts.join(' • ') || 'Маршрут по МХ не распознан';
+    }
+
+    function buildStickerMarkup(sticker) {
+      const raw = String(sticker || '').trim();
+      if (!raw) return safe('Без стикера');
+
+      const digits = raw.replace(/\s+/g, '');
+      if (digits.length <= 4) {
+        return '<span class="stickerTail">' + safe(digits) + '</span>';
+      }
+
+      return '<span class="stickerLead">' + safe(digits.slice(0, -4)) + '</span><span class="stickerTail">' + safe(digits.slice(-4)) + '</span>';
+    }
+
+    function getTaskKey(task) {
+      return JSON.stringify([task.sheetName, task.rowNumber, String(task.wbSticker), String(task.mx)]);
+    }
+
+    function findTaskByKey(key) {
+      return allTasks.find(function(task) {
+        return getTaskKey(task) === key;
+      }) || null;
+    }
+
+    function removeTaskLocally(task) {
+      const key = getTaskKey(task);
+      allTasks = allTasks.filter(function(item) {
+        return getTaskKey(item) !== key;
+      });
+      zoneStats = buildZoneStatsFromTasks(allTasks);
+    }
+
+    function removeTaskCardFromDom(task) {
+      const key = getTaskKey(task);
+      const card = taskList.querySelector('[data-key="' + cssEscape(key) + '"]');
+      if (!card) return;
+
+      card.classList.add('closing');
+      window.setTimeout(function() {
+        if (card.parentNode) {
+          card.parentNode.removeChild(card);
+        }
+      }, 180);
+    }
+
+    function buildZoneStatsFromTasks(tasks) {
+      const stats = {};
+      ['B3', 'B4', 'B5'].forEach(function(zone) {
+        stats[zone] = { total: 0, floors: {}, photos: 0, sources: {} };
+      });
+      tasks.forEach(function(task) {
+        if (!stats[task.zone]) {
+          stats[task.zone] = { total: 0, floors: {}, photos: 0, sources: {} };
+        }
+        stats[task.zone].total += 1;
+        const floor = getFloorLabel(task.floor);
+        stats[task.zone].floors[floor] = (stats[task.zone].floors[floor] || 0) + 1;
+        if (task.hasPhoto) stats[task.zone].photos += 1;
+      });
+      return stats;
+    }
+
+    function renderPhotoStrip(task) {
+      const ids = Array.isArray(task.photoFileIds) ? task.photoFileIds : (task.photoFileId ? [task.photoFileId] : []);
+      if (!ids.length) {
+        photoStrip.innerHTML = '';
+        return;
+      }
+
+      photoStrip.innerHTML = ids.map(function(id, index) {
+        return '<button class="photoThumb" type="button" data-photo-id="' + safeAttr(id) + '">Фото ' + String(index + 1) + '</button>';
+      }).join('');
+    }
+
+    function openPhotoViewer() {
+      if (!activePhotoDataUrl) return;
+      photoViewerImg.src = activePhotoDataUrl;
+      photoViewer.classList.add('open');
+      photoViewer.setAttribute('aria-hidden', 'false');
+    }
+
+    function closePhotoViewer() {
+      photoViewer.classList.remove('open');
+      photoViewer.setAttribute('aria-hidden', 'true');
+      photoViewerImg.removeAttribute('src');
+    }
+
+    function getFloorLabel(value) {
+      return String(value || '').trim() || 'Без этажа';
+    }
+
+    function unique(list) {
+      return Array.from(new Set(list));
+    }
+
+    function compareFloorLabels(a, b) {
+      const numA = Number(a);
+      const numB = Number(b);
+      const validA = !Number.isNaN(numA);
+      const validB = !Number.isNaN(numB);
+      if (validA && validB) return numA - numB;
+      if (validA) return -1;
+      if (validB) return 1;
+      return String(a).localeCompare(String(b), 'ru');
+    }
+
+    function saveEmployeeId(value) {
+      try { localStorage.setItem(EMPLOYEE_CACHE_KEY, JSON.stringify({
+        value: String(value || '').trim(),
+        ts: Date.now()
+      })); } catch (ignored) {}
+    }
+
+    function getSavedEmployeeId() {
+      try {
+        const raw = localStorage.getItem(EMPLOYEE_CACHE_KEY);
+        if (!raw) return '';
+        const data = JSON.parse(raw);
+        if (!data || !data.value || !data.ts) return '';
+        if ((Date.now() - Number(data.ts)) > EMPLOYEE_CACHE_TTL_MS) {
+          localStorage.removeItem(EMPLOYEE_CACHE_KEY);
+          return '';
+        }
+        return String(data.value || '').trim();
+      } catch (error) {
+        return '';
+      }
+    }
+
+    function formatDateTime(isoString) {
+      const date = new Date(isoString);
+      if (Number.isNaN(date.getTime())) return 'нет данных';
+      return new Intl.DateTimeFormat('ru-RU', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      }).format(date);
+    }
+
+    function getErrorMessage(error) {
+      if (!error) return 'Неизвестная ошибка.';
+      return error.message || String(error);
+    }
+
+    function showBanner(text, type) {
+      if (!text) {
+        banner.className = 'banner';
+        banner.textContent = '';
+        return;
+      }
+      banner.className = 'banner show ' + (type || 'success');
+      banner.textContent = text;
+    }
+
+    function safe(value) {
+      return String(value == null ? '' : value).replace(/[&<>"']/g, function(symbol) {
+        return {
+          '&': '&amp;',
+          '<': '&lt;',
+          '>': '&gt;',
+          '"': '&quot;',
+          "'": '&#39;'
+        }[symbol];
+      });
+    }
+
+    function safeAttr(value) {
+      return safe(String(value == null ? '' : value)).replace(/"/g, '&quot;');
+    }
+
+    function cssEscape(value) {
+      if (window.CSS && typeof window.CSS.escape === 'function') {
+        return window.CSS.escape(String(value));
+      }
+      return String(value).replace(/["\\]/g, '\\$&');
+    }
+
+    zonePills.addEventListener('click', function(event) {
+      const button = event.target.closest('[data-zone]');
+      if (!button) return;
+      selectedZone = button.dataset.zone;
+      selectedFloor = getFloors(selectedZone)[0] || '';
+      render();
+    });
+
+    floorPills.addEventListener('click', function(event) {
+      const button = event.target.closest('[data-floor]');
+      if (!button) return;
+      selectedFloor = button.dataset.floor;
+      renderTasks();
+      renderFloors();
+    });
+
+    taskList.addEventListener('click', function(event) {
+      const card = event.target.closest('[data-sheet][data-row]');
+      if (!card) return;
+      openTask(card.dataset.sheet, Number(card.dataset.row));
+    });
+
+    refreshBtn.addEventListener('click', function() {
+      showBanner('', '');
+      loadTasks(true);
+    });
+
+    searchInput.addEventListener('input', renderTasks);
+
+    closeBtn.addEventListener('click', function() { closeModal(false); });
+    sheetCloseBtn.addEventListener('click', function() { closeModal(false); });
+    modal.addEventListener('click', function(event) {
+      if (event.target === modal) closeModal(false);
+    });
+
+    foundBtn.addEventListener('click', function() { sendStatus('Найдено'); });
+    missingBtn.addEventListener('click', function() { sendStatus('Не найдено'); });
+
+    photoBtn.addEventListener('click', choosePhoto);
+    photoDrop.addEventListener('click', choosePhoto);
+    photoDrop.addEventListener('keydown', function(event) {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        choosePhoto();
+      }
+    });
+    photoInput.addEventListener('change', function() {
+      const file = photoInput.files && photoInput.files[0];
+      if (file) handlePhotoFile(file);
+      photoInput.value = '';
+    });
+
+    photoDrop.addEventListener('dragover', function(event) {
+      event.preventDefault();
+    });
+    photoDrop.addEventListener('drop', function(event) {
+      event.preventDefault();
+      const file = event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files[0];
+      if (file) handlePhotoFile(file);
+    });
+    photoDrop.addEventListener('paste', function(event) {
+      const items = Array.from((event.clipboardData && event.clipboardData.items) || []);
+      const imageItem = items.find(function(item) {
+        return item && item.kind === 'file' && /^image\//i.test(item.type || '');
+      });
+      if (!imageItem) return;
+      event.preventDefault();
+      const file = imageItem.getAsFile();
+      if (file) handlePhotoFile(file);
+    });
+
+    photoPreview.addEventListener('click', function(event) {
+      event.stopPropagation();
+      openPhotoViewer();
+    });
+
+    photoStrip.addEventListener('click', function(event) {
+      const button = event.target.closest('[data-photo-id]');
+      if (!button) return;
+      const task = findTaskByKey(selectedTaskKey);
+      if (!task) return;
+      loadTaskPhoto(task, button.dataset.photoId);
+    });
+
+    photoViewer.addEventListener('click', function(event) {
+      if (event.target === photoViewer) closePhotoViewer();
+    });
+
+    photoViewerClose.addEventListener('click', closePhotoViewer);
+
+    window.setInterval(function() {
+      if (modal.classList.contains('open') || isSaving || isUploadingPhoto) return;
+      loadTasks(true);
+    }, AUTO_REFRESH_MS);
+
+    loadTasks(false);
+</script>
+
+</body>
+</html>
