@@ -1,0 +1,4374 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<!-- Native v71 GitHub Pages mirror. Google Script transport replaced with a safe API adapter. -->
+<script src="./runtime-config.js"></script>
+<script src="./bridge.js"></script>
+  <base target="_top">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Поиск товаров vNext</title>
+  <script>
+    (function() {
+      function applyShellClass() {
+        var ua = navigator.userAgent || '';
+        var phoneWidth = Math.min(screen.width || 9999, screen.height || 9999);
+        var viewportWidth = window.innerWidth || document.documentElement.clientWidth || 9999;
+        var touchScreen = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+        var isPhone = /iPhone|iPod|Android.*Mobile|Windows Phone/i.test(ua) || (touchScreen && phoneWidth <= 768) || viewportWidth <= 768;
+        document.documentElement.classList.toggle('phoneShell', isPhone);
+      }
+      applyShellClass();
+      window.addEventListener('resize', applyShellClass);
+      window.addEventListener('orientationchange', applyShellClass);
+    })();
+  </script>
+  <style>
+:root {
+  --bg: #f5f6f3;
+  --surface: #ffffff;
+  --surface-soft: #f8f9f7;
+  --ink: #111827;
+  --muted: #647067;
+  --line: rgba(34, 46, 40, .12);
+  --line-strong: rgba(24, 37, 32, .22);
+  --shadow-sm: 0 8px 22px rgba(20, 32, 28, .08);
+  --shadow-md: 0 18px 46px rgba(20, 32, 28, .14);
+  --radius-sm: 10px;
+  --radius: 14px;
+  --radius-lg: 22px;
+  --tap: 48px;
+  --blue: #1d4f91;
+  --green: #176b4d;
+  --amber: #b27918;
+  --graphite: #374151;
+  --plum: #6b3a78;
+  --found: #16684f;
+  --missing: #a54432;
+  --action: #1d4f91;
+  --motion: 170ms cubic-bezier(.2, .7, .2, 1);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  min-height: 100%;
+  color: var(--ink);
+  background:
+    radial-gradient(circle at 18% 0%, rgba(29, 79, 145, .08), transparent 30%),
+    linear-gradient(180deg, #fafbf9 0%, var(--bg) 100%);
+  font-size: 14px;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: .28;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 140 140' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='.18'/%3E%3C/svg%3E");
+}
+
+button, input { font: inherit; }
+button { cursor: pointer; }
+button:disabled { cursor: not-allowed; opacity: .55; }
+:focus-visible { outline: 3px solid rgba(29, 79, 145, .28); outline-offset: 2px; }
+
+.hidden { display: none !important; }
+.analyticsFilters { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 14px 0; }
+.analyticsFilters label { display: grid; gap: 6px; color: var(--muted); font-size: 12px; font-weight: 700; }
+.analyticsFilters select, .analyticsFilters input { min-height: 44px; padding: 8px 10px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink); }
+.analyticsNumbers { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 14px 0; }
+.analyticsNumbers > div { padding: 14px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface-soft); }
+.analyticsNumbers span, .analyticsNumbers strong { display: block; }
+.analyticsNumbers span { color: var(--muted); font-size: 12px; }
+.analyticsNumbers strong { margin-top: 6px; font-size: 30px; }
+@media (max-width: 520px) { .analyticsFilters { grid-template-columns: 1fr; } }
+.mobileOnly { display: none; }
+.mobileApp,
+.mobileDetailScreen {
+  display: none;
+}
+
+.loginScreen {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(245, 246, 243, .92);
+  backdrop-filter: blur(12px);
+}
+
+.loginPanel {
+  width: min(420px, 100%);
+  padding: 24px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+}
+
+.eyebrow {
+  margin: 0 0 6px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+h1, h2, h3, p { margin-top: 0; }
+
+.loginPanel h1 {
+  margin-bottom: 8px;
+  font-size: 30px;
+  line-height: 1.05;
+}
+
+.loginText { color: var(--muted); line-height: 1.45; }
+
+.loginField {
+  display: grid;
+  gap: 8px;
+  margin: 18px 0;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.loginField input,
+.searchBox input {
+  width: 100%;
+  border: 0;
+  outline: 0;
+  color: var(--ink);
+  background: transparent;
+}
+
+.loginField input {
+  height: 50px;
+  padding: 0 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: #fbfcfa;
+}
+
+.appShell {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  background: rgba(250, 251, 249, .88);
+  border-bottom: 1px solid var(--line);
+  backdrop-filter: blur(16px);
+}
+
+.topbar h1 {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.1;
+}
+
+.topActions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.userChip,
+.reportTopButton,
+.iconButton,
+.filterButton,
+.ghostButton,
+.primaryButton,
+.dangerButton,
+.mobileActionBar button {
+  min-height: var(--tap);
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  transition: transform var(--motion), box-shadow var(--motion), background var(--motion), border-color var(--motion);
+}
+
+.userChip {
+  padding: 0 13px;
+  color: #f8fafc;
+  font-weight: 850;
+  background: #17211d;
+  border-color: #17211d;
+}
+
+.reportTopButton {
+  min-height: 48px;
+  padding: 0 14px;
+  color: #20312a;
+  font-weight: 850;
+  background: #fff;
+  box-shadow: var(--shadow-sm);
+}
+
+.iconButton {
+  width: var(--tap);
+  color: var(--ink);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.workspace {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr) 390px;
+  gap: 14px;
+  padding: 14px;
+}
+
+.controlPanel,
+.taskPane,
+.detailPane {
+  min-width: 0;
+  background: rgba(255, 255, 255, .82);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.controlPanel {
+  position: sticky;
+  top: 86px;
+  align-self: start;
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.statusLine {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.statusLine span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.statusLine span::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #15966f;
+  box-shadow: 0 0 0 4px rgba(21, 150, 111, .12);
+}
+
+.statusLine span.loading::before {
+  width: 13px;
+  height: 13px;
+  background: transparent;
+  border: 2px solid rgba(29, 79, 145, .22);
+  border-top-color: var(--action);
+  box-shadow: none;
+  animation: spin .75s linear infinite;
+}
+
+.statusLine strong { color: var(--ink); }
+
+.searchBox {
+  display: grid;
+  grid-template-columns: 22px 1fr;
+  align-items: center;
+  min-height: 50px;
+  padding: 0 13px;
+  background: #fff;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+}
+
+.segment,
+.floorScroller,
+.quickFilters {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.zoneTab,
+.floorTab,
+.filterButton {
+  min-height: 40px;
+  padding: 0 12px;
+  color: #27312c;
+  font-weight: 850;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+
+.zoneTab,
+.floorTab {
+  display: grid;
+  align-content: center;
+  gap: 2px;
+  min-width: 86px;
+  min-height: 54px;
+  text-align: left;
+}
+
+.zoneTab strong,
+.floorTab strong {
+  display: block;
+  font-size: 14px;
+  line-height: 1.05;
+}
+
+.zoneTab span,
+.floorTab span {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.floorTab {
+  min-width: 96px;
+  border-radius: 12px;
+}
+
+.zoneTab {
+  position: relative;
+  overflow: hidden;
+}
+
+.zoneTab::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  background: var(--zone, var(--action));
+}
+
+.zoneTab.active,
+.floorTab.active,
+.filterButton.active {
+  color: var(--ink);
+  border-color: color-mix(in srgb, var(--zone, var(--action)) 46%, transparent);
+  background: color-mix(in srgb, var(--zone, var(--action)) 12%, white);
+}
+
+.filterButton.active {
+  --zone: var(--action);
+}
+
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.metrics div {
+  min-width: 0;
+  padding: 11px;
+  background: #f6f8f5;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.metrics span {
+  display: block;
+  font-size: 22px;
+  font-weight: 900;
+}
+
+.metrics small {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.taskPane {
+  overflow: hidden;
+}
+
+.paneHeader {
+  display: flex;
+  justify-content: space-between;
+  padding: 15px 15px 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.paneHeader h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.paneHeader p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.taskList {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  max-height: calc(100vh - 168px);
+  overflow: auto;
+}
+
+.taskCard {
+  --zone: var(--action);
+  position: relative;
+  display: grid;
+  gap: 10px;
+  width: 100%;
+  padding: 15px 14px 14px 18px;
+  text-align: left;
+  color: var(--ink);
+  background: linear-gradient(180deg, #fff 0%, #fbfcfa 100%);
+  border: 1px solid rgba(24, 37, 32, .14);
+  border-radius: 16px;
+  box-shadow: 0 10px 26px rgba(15, 23, 20, .075);
+}
+
+.taskCard::before {
+  content: "";
+  position: absolute;
+  top: 10px;
+  bottom: 10px;
+  left: 0;
+  width: 4px;
+  border-radius: 0 8px 8px 0;
+  background: var(--zone);
+}
+
+.taskCard:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--zone) 34%, var(--line));
+  box-shadow: var(--shadow-sm);
+}
+
+.taskCard:active { transform: translateY(0); }
+
+.taskCard.selected {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--zone) 8%, white) 0%, #fff 100%);
+  border-color: color-mix(in srgb, var(--zone) 58%, var(--line));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--zone) 13%, transparent), var(--shadow-sm);
+}
+
+.taskTop,
+.taskMetaLine {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.sticker,
+#detailSticker {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
+
+.sticker {
+  font-size: 25px;
+  line-height: 1;
+  font-weight: 950;
+}
+
+.stickerTail {
+  display: inline-block;
+  margin-left: 2px;
+  padding: 2px 5px 3px;
+  color: #0f241e;
+  background: #d8eee4;
+  border-radius: 8px;
+}
+
+.zoneBadge,
+.statusBadge,
+.photoBadge,
+.routeBadge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.zoneBadge {
+  color: #fff;
+  background: var(--zone);
+}
+
+.routeBadge {
+  color: var(--ink);
+  background: #eef2ed;
+  border: 1px solid var(--line);
+}
+
+.statusBadge {
+  color: #19352c;
+  background: #e6f3ee;
+}
+
+.photoBadge {
+  color: #243146;
+  background: #e7ecf4;
+}
+
+.taskName {
+  color: #2b3530;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.28;
+}
+
+.mxBlock {
+  display: grid;
+  gap: 4px;
+  padding: 10px 11px;
+  background: linear-gradient(180deg, #f5faf7 0%, #eef6f1 100%);
+  border: 1px solid rgba(23, 107, 77, .14);
+  border-radius: 12px;
+}
+
+.mxBlock span {
+  color: #176b4d;
+  font-size: 10px;
+  font-weight: 950;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.mxBlock strong {
+  color: #11251e;
+  font-size: 15px;
+  line-height: 1.14;
+  font-weight: 950;
+  overflow-wrap: anywhere;
+}
+
+.mxBlock small {
+  color: #506158;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.chips,
+.detailChips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 27px;
+  padding: 0 8px;
+  color: #303b35;
+  background: #f2f4f1;
+  border: 1px solid rgba(24, 37, 32, .08);
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.openHint {
+  display: none;
+}
+
+.detailPane {
+  position: sticky;
+  top: 86px;
+  align-self: start;
+  min-height: calc(100vh - 100px);
+  overflow: hidden;
+  background: #fff;
+}
+
+.sheetBackdrop {
+  display: none;
+}
+
+.emptyDetail {
+  display: grid;
+  gap: 12px;
+  padding: 20px;
+}
+
+.emptyDetail h2 { margin: 0; }
+.emptyDetail p { color: var(--muted); }
+
+.summaryGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+.summaryCell {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #f7f8f6;
+}
+
+.summaryCell b {
+  display: block;
+  font-size: 20px;
+}
+
+.summaryCell span {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.taskDetail {
+  --zone: var(--action);
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border-top: 5px solid var(--zone);
+}
+
+.detailHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+#detailSticker {
+  margin: 0;
+  font-size: 30px;
+  line-height: 1;
+  font-weight: 950;
+}
+
+#detailName {
+  margin: -4px 0 0;
+  color: #26312c;
+  font-size: 16px;
+  line-height: 1.35;
+}
+
+.detailGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.detailGrid div {
+  padding: 10px;
+  background: #f7f8f6;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+
+.detailGrid dt {
+  margin-bottom: 4px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.detailGrid dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-weight: 850;
+}
+
+.photoPanel {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  background: #f7f8f6;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.photoPanelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.photoPanelHeader span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.photoPanelHeader strong {
+  display: inline-flex;
+  justify-content: center;
+  min-width: 28px;
+  margin-left: 6px;
+  padding: 4px 7px;
+  border-radius: 999px;
+  background: #fff;
+  border: 1px solid var(--line);
+}
+
+.photoButtons {
+  display: flex;
+  gap: 6px;
+}
+
+.ghostButton {
+  min-height: 38px;
+  padding: 0 10px;
+  color: #26312c;
+  font-weight: 850;
+  background: #fff;
+}
+
+.photoStatus {
+  min-height: 18px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.photoStrip {
+  display: flex;
+  gap: 8px;
+  min-height: 76px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.photoThumb,
+.photoEmpty {
+  flex: 0 0 86px;
+  width: 86px;
+  height: 76px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: #fff;
+}
+
+.photoThumb {
+  overflow: hidden;
+  padding: 0;
+}
+
+.photoThumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.photoEmpty {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.message {
+  min-height: 20px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.message.error { color: var(--missing); }
+.message.success { color: var(--found); }
+
+.actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.primaryButton,
+.dangerButton {
+  width: 100%;
+  padding: 0 14px;
+  color: #fff;
+  font-weight: 900;
+  border: 0;
+}
+
+.primaryButton {
+  background: linear-gradient(180deg, #1d7659 0%, var(--found) 100%);
+  box-shadow: 0 12px 26px rgba(22, 104, 79, .22);
+}
+
+.dangerButton {
+  background: linear-gradient(180deg, #b64e39 0%, var(--missing) 100%);
+  box-shadow: 0 12px 26px rgba(165, 68, 50, .2);
+}
+
+.primaryButton:active,
+.dangerButton:active,
+.ghostButton:active,
+.filterButton:active,
+.iconButton:active,
+.mobileActionBar button:active {
+  transform: translateY(1px);
+}
+
+.mobileActionBar {
+  display: none;
+}
+
+.toastStack {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 90;
+  display: grid;
+  gap: 8px;
+}
+
+.toast {
+  max-width: 340px;
+  padding: 12px 14px;
+  color: #fff;
+  background: #17211d;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+  animation: toastIn var(--motion);
+}
+
+.toast.error {
+  background: #9f3d2f;
+}
+
+.loadingOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 140;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.loadingBox {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  max-width: min(360px, calc(100vw - 32px));
+  padding: 12px 16px;
+  color: #f8fafc;
+  background: rgba(17, 24, 39, .92);
+  border: 1px solid rgba(255, 255, 255, .14);
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(15, 23, 42, .32);
+  backdrop-filter: blur(12px);
+}
+
+.loadingOverlay.success .loadingBox {
+  background: rgba(22, 104, 79, .95);
+}
+
+.loadingOverlay.error .loadingBox {
+  background: rgba(159, 61, 47, .95);
+}
+
+.loadingOverlay.success .loadingSpinner,
+.loadingOverlay.error .loadingSpinner {
+  display: none;
+}
+
+.loadingSpinner {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  border: 2px solid rgba(255, 255, 255, .28);
+  border-top-color: #fff;
+  animation: spin .75s linear infinite;
+}
+
+.reportModal {
+  position: fixed;
+  inset: 0;
+  z-index: 110;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(17, 24, 39, .46);
+  backdrop-filter: blur(4px);
+}
+
+.reportDialog {
+  display: grid;
+  gap: 12px;
+  width: min(760px, 100%);
+  max-height: min(86vh, 820px);
+  overflow: auto;
+  padding: 18px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  box-shadow: var(--shadow-md);
+}
+
+.reportHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.reportHeader h2 {
+  margin: 0;
+  font-size: 24px;
+  line-height: 1.1;
+}
+
+.reportHint {
+  margin: -4px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.reportTextarea {
+  width: 100%;
+  min-height: 190px;
+  resize: vertical;
+  padding: 12px;
+  color: var(--ink);
+  background: #fbfcfa;
+  border: 1px solid var(--line-strong);
+  border-radius: 14px;
+  outline: 0;
+  font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.reportActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.reportActions .primaryButton,
+.reportActions .ghostButton {
+  width: auto;
+  min-height: 44px;
+}
+
+.reportOutput {
+  min-height: 170px;
+  margin: 0;
+  padding: 12px;
+  overflow: auto;
+  white-space: pre-wrap;
+  color: #17211d;
+  background: #f7f8f6;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.idStatsSummary {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+.idStatsSummary div {
+  padding: 12px;
+  background: #f7f8f6;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.idStatsSummary b {
+  display: block;
+  font-size: 22px;
+}
+
+.idStatsSummary span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.idStatsRanking {
+  display: grid;
+  gap: 9px;
+  max-height: 280px;
+  overflow: auto;
+}
+
+.idStatsRow {
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  background: #f7f8f6;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.idStatsRowTop {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-weight: 900;
+}
+
+.idStatsBar {
+  height: 8px;
+  overflow: hidden;
+  background: #e6ece8;
+  border-radius: 999px;
+}
+
+.idStatsBar i {
+  display: block;
+  height: 100%;
+  background: var(--found);
+  border-radius: inherit;
+}
+
+.photoViewer {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(8, 12, 11, .86);
+}
+
+.photoViewer img {
+  max-width: 100%;
+  max-height: 88vh;
+  border-radius: 14px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, .44);
+}
+
+.photoViewerClose {
+  position: fixed;
+  top: 14px;
+  right: 14px;
+  width: 48px;
+  height: 48px;
+  color: #fff;
+  background: rgba(255, 255, 255, .12);
+  border: 1px solid rgba(255, 255, 255, .22);
+  border-radius: 999px;
+  font-size: 28px;
+}
+
+.skeleton {
+  min-height: 108px;
+  border-radius: var(--radius);
+  background: linear-gradient(90deg, #eef1ec 0%, #fafbf9 50%, #eef1ec 100%);
+  background-size: 220% 100%;
+  animation: shimmer 1.2s infinite;
+}
+
+@keyframes shimmer {
+  to { background-position-x: -220%; }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes toastIn {
+  from { transform: translateY(8px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@media (max-width: 1040px) {
+  .workspace {
+    grid-template-columns: 250px minmax(0, 1fr);
+  }
+
+  .detailPane {
+    position: fixed;
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 60;
+    min-height: 0;
+    max-height: 92vh;
+    border-radius: 24px 24px 0 0;
+    background: #fff;
+    transform: translateY(calc(100% - 74px));
+    transition: transform var(--motion);
+    box-shadow: 0 -24px 60px rgba(15, 23, 20, .24);
+  }
+
+  .detailPane.open.half { transform: translateY(28vh); }
+  .detailPane.open.full { transform: translateY(0); }
+
+  .detailPane:not(.hasSelection) { display: none; }
+
+  .taskDetail {
+    max-height: 90vh;
+    overflow: auto;
+    padding-bottom: 94px;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .mobileOnly { display: inline-flex; }
+
+  .sheetHandle {
+    display: block;
+    width: 48px;
+    height: 5px;
+    min-height: 5px;
+    margin: 10px auto 0;
+    padding: 0;
+    border: 0;
+    border-radius: 999px;
+    background: #c9d0ca;
+  }
+
+  .mobileActionBar {
+    position: fixed;
+    left: 10px;
+    right: 10px;
+    bottom: 10px;
+    z-index: 75;
+    display: none;
+    grid-template-columns: .9fr 1fr 1fr;
+    gap: 8px;
+    padding: 8px;
+    padding-bottom: calc(8px + env(safe-area-inset-bottom));
+    background: rgba(255, 255, 255, .92);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    box-shadow: var(--shadow-md);
+    backdrop-filter: blur(14px);
+  }
+
+  .mobileActionBar.visible { display: grid; }
+
+  .mobileActionBar button {
+    min-height: 48px;
+    border: 0;
+    font-weight: 900;
+    color: #fff;
+  }
+
+  .mobileActionBar button:first-child {
+    color: #26312c;
+    background: #eef2ed;
+  }
+
+  .mobileFound { background: var(--found); }
+  .mobileNotFound { background: var(--missing); }
+}
+
+@media (max-width: 760px) {
+  html, body { font-size: 14px; }
+
+  .topbar {
+    padding: 12px 12px 10px;
+  }
+
+  .workspace {
+    display: block;
+    padding: 0 10px 92px;
+  }
+
+  .controlPanel {
+    position: sticky;
+    top: 71px;
+    z-index: 15;
+    margin: 0 -10px 10px;
+    border-radius: 0 0 22px 22px;
+    border-left: 0;
+    border-right: 0;
+    box-shadow: 0 10px 24px rgba(20, 32, 28, .08);
+  }
+
+  .segment,
+  .floorScroller {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 2px;
+  }
+
+  .zoneTab,
+  .floorTab {
+    flex: 0 0 auto;
+  }
+
+  .taskPane {
+    border-radius: 18px;
+  }
+
+  .taskList {
+    max-height: none;
+    overflow: visible;
+    padding: 10px;
+  }
+
+  .sticker {
+    font-size: 25px;
+  }
+
+  .taskCard {
+    padding-top: 14px;
+    padding-bottom: 14px;
+  }
+
+  .toastStack {
+    left: 12px;
+    right: 12px;
+    bottom: 86px;
+  }
+
+  .toast {
+    max-width: none;
+  }
+}
+
+.phoneShell,
+.phoneShell body {
+  width: 100vw;
+  max-width: none;
+  margin: 0;
+  min-width: 0;
+  overflow-x: hidden;
+  font-size: 14px;
+  background: linear-gradient(180deg, #fbfcfa 0%, #f3f5f2 100%);
+}
+
+.sheetLocked,
+.sheetLocked body {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+.phoneShell .appShell {
+  width: 100vw;
+  max-width: none;
+  min-width: 0;
+  margin: 0;
+}
+
+.phoneShell .topbar {
+  position: sticky;
+  top: 0;
+  z-index: 25;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 8px;
+  padding: 12px 12px 10px;
+  width: 100vw;
+  background: rgba(250, 251, 249, .95);
+}
+
+.phoneShell .topbar h1 {
+  font-size: 24px;
+  line-height: 1.05;
+}
+
+.phoneShell .topActions {
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  max-width: 52vw;
+}
+
+.phoneShell .userChip,
+.phoneShell .iconButton {
+  min-width: 46px;
+  height: 46px;
+  min-height: 46px;
+  border-radius: 12px;
+  font-size: 14px;
+}
+
+.phoneShell .reportTopButton {
+  min-height: 36px;
+  padding: 0 8px;
+  border-radius: 10px;
+  font-size: 11px;
+}
+
+.phoneShell .workspace {
+  display: block;
+  width: 100vw;
+  max-width: none;
+  margin: 0;
+  padding: 0 12px 96px;
+  padding-bottom: calc(96px + env(safe-area-inset-bottom));
+}
+
+.phoneShell .controlPanel {
+  position: relative;
+  top: 73px;
+  z-index: 18;
+  display: grid;
+  gap: 9px;
+  width: 100vw;
+  max-width: none;
+  margin: 0 -12px 12px;
+  padding: 10px 12px 12px;
+  border-left: 0;
+  border-right: 0;
+  border-radius: 0 0 22px 22px;
+  background: rgba(250, 251, 249, .96);
+  box-shadow: 0 10px 24px rgba(20, 32, 28, .08);
+  backdrop-filter: blur(14px);
+}
+
+.phoneShell .statusLine {
+  min-height: 24px;
+  align-items: center;
+  font-size: 13px;
+}
+
+.phoneShell .statusLine span::before {
+  content: "";
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  margin-right: 7px;
+  border-radius: 999px;
+  background: #15966f;
+  box-shadow: 0 0 0 4px rgba(21, 150, 111, .12);
+  vertical-align: 0;
+}
+
+.phoneShell .statusLine span.loading::before {
+  width: 13px;
+  height: 13px;
+  background: transparent;
+  border: 2px solid rgba(29, 79, 145, .22);
+  border-top-color: var(--action);
+  box-shadow: none;
+  animation: spin .75s linear infinite;
+}
+
+.phoneShell .statusLine strong {
+  font-size: 20px;
+  font-weight: 950;
+}
+
+.phoneShell .searchBox {
+  min-height: 52px;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.phoneShell .searchBox input {
+  font-size: 15px;
+}
+
+.phoneShell .segment,
+.phoneShell .floorScroller,
+.phoneShell .quickFilters {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 1px 0 3px;
+  scrollbar-width: none;
+}
+
+.phoneShell .segment::-webkit-scrollbar,
+.phoneShell .floorScroller::-webkit-scrollbar,
+.phoneShell .quickFilters::-webkit-scrollbar {
+  display: none;
+}
+
+.phoneShell .zoneTab,
+.phoneShell .floorTab,
+.phoneShell .filterButton {
+  flex: 0 0 auto;
+  min-height: 40px;
+  padding: 0 13px;
+  border-radius: 8px;
+  font-size: 14px;
+  box-shadow: 0 4px 10px rgba(20, 32, 28, .04);
+}
+
+.phoneShell .zoneTab::before {
+  width: 0;
+}
+
+.phoneShell .zoneTab.active,
+.phoneShell .floorTab.active {
+  border-color: rgba(29, 79, 145, .34);
+  background: #eaf2ff;
+  box-shadow: inset 0 0 0 1px rgba(29, 79, 145, .1);
+}
+
+.phoneShell .metrics {
+  display: flex;
+  gap: 0;
+  align-items: center;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.phoneShell .metrics div {
+  display: inline-flex;
+  gap: 4px;
+  align-items: baseline;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.phoneShell .metrics div + div::before {
+  content: "·";
+  margin: 0 8px;
+  color: #9aa59f;
+}
+
+.phoneShell .metrics span {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.phoneShell .metrics small {
+  margin: 0;
+  font-size: 13px;
+}
+
+.phoneShell .taskPane {
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  width: 100%;
+}
+
+.phoneShell .paneHeader {
+  padding: 5px 0 10px;
+  border: 0;
+}
+
+.phoneShell .paneHeader h2 {
+  font-size: 22px;
+  line-height: 1.05;
+}
+
+.phoneShell .paneHeader p {
+  font-size: 13px;
+}
+
+.phoneShell .taskList {
+  display: grid;
+  gap: 12px;
+  max-height: none;
+  overflow: visible;
+  padding: 0 0 12px;
+}
+
+.phoneShell .taskCard {
+  gap: 12px;
+  min-height: 0;
+  padding: 16px 15px 15px 18px;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #fff 0%, #fbfcfa 100%);
+  box-shadow: 0 12px 28px rgba(20, 32, 28, .08);
+}
+
+.phoneShell .taskCard::before {
+  top: 14px;
+  bottom: 14px;
+  width: 4px;
+  border-radius: 0 10px 10px 0;
+}
+
+.phoneShell .taskTop {
+  align-items: flex-start;
+}
+
+.phoneShell .sticker {
+  font-size: 30px;
+  line-height: 1.04;
+}
+
+.phoneShell .stickerTail {
+  padding: 2px 7px 4px;
+  border-radius: 8px;
+  background: #cceee1;
+  box-shadow: inset 0 0 0 1px rgba(23, 107, 77, .12);
+}
+
+.phoneShell .zoneBadge {
+  min-height: 31px;
+  padding: 0 11px;
+  color: var(--zone);
+  background: color-mix(in srgb, var(--zone) 12%, white);
+  border: 1px solid color-mix(in srgb, var(--zone) 22%, transparent);
+}
+
+.phoneShell .routeBadge {
+  min-height: 31px;
+  color: #176b4d;
+  background: #dff2ea;
+  border-color: rgba(23, 107, 77, .14);
+}
+
+.phoneShell .taskName {
+  font-size: 17px;
+  font-weight: 850;
+  line-height: 1.25;
+}
+
+.phoneShell .mxBlock {
+  padding: 13px 12px;
+  border-radius: 14px;
+}
+
+.phoneShell .mxBlock strong {
+  font-size: 20px;
+}
+
+.phoneShell .mxBlock small {
+  font-size: 13px;
+}
+
+.phoneShell .chips {
+  gap: 7px;
+}
+
+.phoneShell .chip,
+.phoneShell .photoBadge,
+.phoneShell .statusBadge {
+  min-height: 34px;
+  padding: 0 10px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.phoneShell .openHint {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 12px;
+  color: #fff;
+  background: #17211d;
+  border-radius: 9px;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.phoneShell .detailPane {
+  position: fixed;
+  top: 0;
+  left: 50%;
+  right: auto;
+  bottom: 0;
+  z-index: 60;
+  display: block;
+  width: 100vw;
+  height: 100dvh;
+  min-height: 0;
+  max-height: 100dvh;
+  border-radius: 0;
+  background: #fff;
+  opacity: 1;
+  isolation: isolate;
+  overscroll-behavior: contain;
+  transform: translate(-50%, 100%);
+  transition: transform var(--motion);
+  box-shadow: 0 -22px 55px rgba(15, 23, 20, .22);
+}
+
+.phoneShell .detailPane:not(.hasSelection) {
+  display: none;
+}
+
+.phoneShell .detailPane.open.half {
+  transform: translate(-50%, 0);
+}
+
+.phoneShell .detailPane.open.full {
+  transform: translate(-50%, 0);
+  top: 0;
+  bottom: 0;
+  height: 100dvh;
+  max-height: 100dvh;
+}
+
+.phoneShell .taskDetail {
+  max-height: 100dvh;
+  overflow: auto;
+  padding: 14px 14px calc(104px + env(safe-area-inset-bottom));
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.phoneShell .detailHeader {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  margin: -14px -14px 0;
+  padding: 14px;
+  background: rgba(255, 255, 255, .96);
+  border-bottom: 1px solid var(--line);
+  backdrop-filter: blur(12px);
+}
+
+.phoneShell #detailSticker {
+  font-size: 31px;
+}
+
+.phoneShell #detailName {
+  font-size: 18px;
+}
+
+.phoneShell .detailGrid {
+  grid-template-columns: 1fr;
+}
+
+.phoneShell .detailGrid div {
+  padding: 13px;
+}
+
+.phoneShell .detailGrid dd {
+  font-size: 16px;
+}
+
+.phoneShell .mobileOnly {
+  display: inline-flex;
+}
+
+.phoneShell .sheetHandle {
+  display: block;
+  width: 48px;
+  height: 5px;
+  min-height: 5px;
+  margin: 10px auto 0;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: #c9d0ca;
+}
+
+.phoneShell .mobileActionBar {
+  position: fixed;
+  left: 50%;
+  right: auto;
+  bottom: 10px;
+  width: calc(100vw - 20px);
+  z-index: 95;
+  display: none;
+  grid-template-columns: .9fr 1fr 1fr;
+  gap: 8px;
+  padding: 8px;
+  padding-bottom: calc(10px + env(safe-area-inset-bottom));
+  background: rgba(255, 255, 255, .92);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  box-shadow: var(--shadow-md);
+  backdrop-filter: blur(14px);
+  transform: translateX(-50%);
+}
+
+.phoneShell .mobileActionBar.visible {
+  display: grid;
+}
+
+.phoneShell .mobileActionBar button {
+  min-height: 48px;
+  border: 0;
+  font-weight: 900;
+  color: #fff;
+}
+
+.phoneShell .mobileActionBar button:first-child {
+  color: #26312c;
+  background: #eef2ed;
+}
+
+.phoneShell .toastStack {
+  left: 12px;
+  right: 12px;
+  bottom: 86px;
+}
+
+.phoneShell .toast {
+  max-width: none;
+}
+
+.phoneShell .appShell {
+  display: none;
+}
+
+.phoneShell .mobileApp {
+  display: block;
+  width: 100vw;
+  min-height: 100dvh;
+  padding-bottom: calc(18px + env(safe-area-inset-bottom));
+  background: linear-gradient(180deg, #fbfcfa 0%, #f3f5f2 100%);
+}
+
+.mobileHeader {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+  padding: 14px 14px 10px;
+  background: rgba(251, 252, 250, .96);
+  border-bottom: 1px solid var(--line);
+  backdrop-filter: blur(14px);
+}
+
+.mobileHeader h1 {
+  margin: 0;
+  font-size: 25px;
+  line-height: 1.05;
+}
+
+.mobileHeaderActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  max-width: 48vw;
+}
+
+.mobileToolButton,
+.mobileUserButton,
+.mobileRefreshButton,
+.mobileFilterButton,
+.mobileZoneButton,
+.mobileFloorButton,
+.mobileCloseButton {
+  min-height: 44px;
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 12px;
+  font-weight: 900;
+}
+
+.mobileToolButton {
+  min-height: 34px;
+  padding: 0 8px;
+  font-size: 11px;
+}
+
+.mobileUserButton,
+.mobileRefreshButton {
+  width: 46px;
+  height: 46px;
+}
+
+.mobileUserButton {
+  color: #fff;
+  background: #17211d;
+}
+
+.mobileFilters {
+  display: grid;
+  gap: 10px;
+  padding: 10px 14px 12px;
+  background: rgba(251, 252, 250, .96);
+  border-bottom: 1px solid var(--line);
+}
+
+.mobileStatusLine {
+  display: flex;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.mobileStatusLine strong {
+  color: var(--ink);
+  font-size: 18px;
+}
+
+.mobileSearch {
+  display: grid;
+  grid-template-columns: 22px 1fr;
+  align-items: center;
+  min-height: 52px;
+  padding: 0 13px;
+  background: #fff;
+  border: 1px solid var(--line-strong);
+  border-radius: 13px;
+}
+
+.mobileSearch input {
+  width: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font-size: 16px;
+}
+
+.mobileZoneScroller,
+.mobileFloorScroller,
+.mobileQuickFilters {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: none;
+}
+
+.mobileZoneScroller::-webkit-scrollbar,
+.mobileFloorScroller::-webkit-scrollbar,
+.mobileQuickFilters::-webkit-scrollbar {
+  display: none;
+}
+
+.mobileZoneButton {
+  flex: 0 0 auto;
+  display: grid;
+  align-content: center;
+  gap: 2px;
+  min-width: 82px;
+  min-height: 58px;
+  padding: 0 13px;
+  text-align: left;
+}
+
+.mobileZoneButton strong {
+  font-size: 17px;
+}
+
+.mobileZoneButton span,
+.mobileFloorButton span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.mobileZoneButton.active,
+.mobileFloorButton.active,
+.mobileFilterButton.active {
+  color: #0f241e;
+  background: color-mix(in srgb, var(--zone, var(--action)) 12%, white);
+  border-color: color-mix(in srgb, var(--zone, var(--action)) 34%, transparent);
+}
+
+.mobileFilterButton,
+.mobileFloorButton {
+  flex: 0 0 auto;
+  min-height: 44px;
+  padding: 0 13px;
+  font-size: 15px;
+}
+
+.mobileSummary {
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 850;
+}
+
+.mobileTaskArea {
+  padding: 14px;
+}
+
+.mobileTaskHeading {
+  margin-bottom: 10px;
+}
+
+.mobileTaskHeading h2 {
+  margin: 0;
+  font-size: 24px;
+}
+
+.mobileTaskHeading p {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.mobileTaskList {
+  display: grid;
+  gap: 13px;
+}
+
+.mobileTaskCard {
+  --zone: var(--action);
+  position: relative;
+  display: grid;
+  gap: 12px;
+  width: 100%;
+  padding: 16px 15px 15px 18px;
+  text-align: left;
+  color: var(--ink);
+  background: #fff;
+  border: 1px solid rgba(24, 37, 32, .14);
+  border-radius: 18px;
+  box-shadow: 0 12px 28px rgba(20, 32, 28, .09);
+}
+
+.mobileTaskCard::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 16px;
+  bottom: 16px;
+  width: 4px;
+  background: var(--zone);
+  border-radius: 0 10px 10px 0;
+}
+
+.mobileStickerLine {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.mobileSticker {
+  font-size: 31px;
+  line-height: 1.05;
+  font-weight: 950;
+  font-variant-numeric: tabular-nums;
+}
+
+.mobileStickerLine > span {
+  min-height: 31px;
+  padding: 6px 10px;
+  color: var(--zone);
+  background: color-mix(in srgb, var(--zone) 12%, white);
+  border: 1px solid color-mix(in srgb, var(--zone) 22%, transparent);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.mobileRouteLine {
+  color: #176b4d;
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.mobileTaskName {
+  font-size: 17px;
+  line-height: 1.25;
+  font-weight: 850;
+}
+
+.mobileCardFooter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.mobileCardFooter span,
+.mobileCardFooter b {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 10px;
+  background: #f2f4f1;
+  border: 1px solid rgba(24, 37, 32, .08);
+  border-radius: 9px;
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.mobileCardFooter b {
+  color: #fff;
+  background: #17211d;
+}
+
+.mobileEmpty,
+.mobileSkeleton {
+  min-height: 116px;
+  border-radius: 18px;
+  background: #fff;
+  border: 1px solid var(--line);
+}
+
+.mobileEmpty {
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  color: var(--muted);
+  font-weight: 850;
+}
+
+.mobileSkeleton {
+  background: linear-gradient(90deg, #eef1ec 0%, #fafbf9 50%, #eef1ec 100%);
+  background-size: 220% 100%;
+  animation: shimmer 1.2s infinite;
+}
+
+.phoneShell .mobileDetailScreen {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: block;
+  width: 100vw;
+  height: 100dvh;
+  overflow: hidden;
+  background: #fff;
+}
+
+.phoneShell .mobileDetailScreen.hidden {
+  display: none;
+}
+
+.mobileDetailHeader {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 14px;
+  background: rgba(255, 255, 255, .97);
+  border-bottom: 1px solid var(--line);
+  backdrop-filter: blur(12px);
+}
+
+.mobileDetailHeader h2 {
+  margin: 0;
+  font-size: 32px;
+  line-height: 1.05;
+}
+
+.mobileCloseButton {
+  width: 46px;
+  height: 46px;
+  font-size: 26px;
+}
+
+.mobileDetailContent {
+  height: calc(100dvh - 75px);
+  overflow: auto;
+  padding: 14px 14px calc(106px + env(safe-area-inset-bottom));
+  -webkit-overflow-scrolling: touch;
+}
+
+.mobileDetailContent h3 {
+  margin: 0 0 12px;
+  font-size: 19px;
+  line-height: 1.25;
+}
+
+.mobileDetailGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 9px;
+  margin: 12px 0;
+}
+
+.mobileDetailGrid div {
+  padding: 13px;
+  background: #f7f8f6;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.mobileDetailGrid dt {
+  margin-bottom: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.mobileDetailGrid dd {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 850;
+  overflow-wrap: anywhere;
+}
+
+.phoneShell .reportModal {
+  place-items: stretch;
+  padding: 10px;
+  padding-bottom: calc(10px + env(safe-area-inset-bottom));
+}
+
+.phoneShell .reportDialog {
+  width: 100%;
+  max-height: calc(100dvh - 20px - env(safe-area-inset-bottom));
+  border-radius: 18px;
+}
+
+.phoneShell .reportTextarea {
+  min-height: 170px;
+  font-size: 14px;
+}
+
+.phoneShell .idStatsSummary {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.phoneShell .idStatsRanking {
+  max-height: 34dvh;
+}
+
+@media (max-width: 768px) {
+  .appShell {
+    display: none;
+  }
+
+  .mobileApp {
+    display: block;
+    width: 100vw;
+    min-height: 100dvh;
+    padding-bottom: calc(18px + env(safe-area-inset-bottom));
+    background: linear-gradient(180deg, #fbfcfa 0%, #f3f5f2 100%);
+  }
+
+  .mobileDetailScreen {
+    position: fixed;
+    inset: 0;
+    z-index: 80;
+    display: block;
+    width: 100vw;
+    height: 100dvh;
+    overflow: hidden;
+    background: #fff;
+  }
+
+  .mobileDetailScreen.hidden {
+    display: none;
+  }
+
+  .mobileActionBar {
+    position: fixed;
+    left: 50%;
+    right: auto;
+    bottom: 10px;
+    z-index: 95;
+    display: none;
+    grid-template-columns: .9fr 1fr 1fr;
+    gap: 8px;
+    width: calc(100vw - 20px);
+    padding: 8px;
+    padding-bottom: calc(10px + env(safe-area-inset-bottom));
+    background: rgba(255, 255, 255, .92);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    box-shadow: var(--shadow-md);
+    backdrop-filter: blur(14px);
+    transform: translateX(-50%);
+  }
+
+  .mobileActionBar.visible {
+    display: grid;
+  }
+
+  .mobileActionBar button {
+    min-height: 48px;
+    border: 0;
+    font-weight: 900;
+    color: #fff;
+  }
+
+  .mobileActionBar button:first-child {
+    color: #26312c;
+    background: #eef2ed;
+  }
+
+  .toastStack {
+    left: 12px;
+    right: 12px;
+    bottom: 86px;
+  }
+
+  .toast {
+    max-width: none;
+  }
+}
+
+@media (max-width: 1040px) {
+  .sheetBackdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 55;
+    display: none;
+    background: rgba(17, 24, 39, .42);
+    backdrop-filter: blur(3px);
+  }
+
+  .sheetBackdrop.visible {
+    display: block;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 1ms !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+</style>
+
+</head>
+<body>
+  <section class="loginScreen" id="loginScreen" aria-label="ID исполнителя">
+    <form class="loginPanel" id="loginForm">
+      <p class="eyebrow">Смена исполнителя</p>
+      <h1>Введите ID</h1>
+      <p class="loginText">ID будет записан в Google Таблицу при закрытии задания.</p>
+      <label class="loginField">
+        <span>ID исполнителя</span>
+        <input id="employeeLogin" autocomplete="username" placeholder="Например E017" required>
+      </label>
+      <button class="primaryButton" type="submit">Начать работу</button>
+      <div class="message" id="loginMessage"></div>
+    </form>
+  </section>
+
+  <div class="mobileApp" id="mobileApp">
+    <header class="mobileHeader">
+      <div>
+        <p class="eyebrow">Поиск товаров</p>
+        <h1>Активные задания</h1>
+      </div>
+      <div class="mobileHeaderActions">
+        <button class="mobileToolButton" id="mobileReportBtn" type="button">Отчёт</button>
+        <button class="mobileToolButton" id="mobileIdStatsBtn" type="button">ID</button>
+        <button class="mobileToolButton" id="mobileAnalyticsBtn" type="button">Аналитика</button>
+        <button class="mobileUserButton" id="mobileUserChip" type="button">ID</button>
+        <button class="mobileRefreshButton" id="mobileRefreshBtn" type="button" aria-label="Обновить">↻</button>
+      </div>
+    </header>
+
+    <section class="mobileFilters" aria-label="Мобильные фильтры">
+      <div class="mobileStatusLine">
+        <span id="mobileSyncText">Загрузка...</span>
+        <strong id="mobileTotalText">0</strong>
+      </div>
+      <label class="mobileSearch">
+        <span aria-hidden="true">⌕</span>
+        <input id="mobileSearchInput" type="search" placeholder="Стикер, товар, МХ, BOX" autocomplete="off">
+      </label>
+      <div class="mobileZoneScroller" id="mobileZoneTabs"></div>
+      <div class="mobileQuickFilters">
+        <button class="mobileFilterButton" id="mobileMyTasksToggle" type="button">Мои задания</button>
+        <button class="mobileFilterButton" id="mobilePhotoFilterToggle" type="button">С фото</button>
+      </div>
+      <div class="mobileFloorScroller" id="mobileFloorTabs"></div>
+      <div class="mobileSummary" id="mobileSummary">0 в поиске · 0 этажей · 0 фото</div>
+    </section>
+
+    <main class="mobileTaskArea">
+      <div class="mobileTaskHeading">
+        <h2 id="mobilePaneTitle">Задания</h2>
+        <p id="mobilePaneMeta">Нет данных</p>
+      </div>
+      <div class="mobileTaskList" id="mobileTaskList"></div>
+    </main>
+  </div>
+
+  <section class="mobileDetailScreen hidden" id="mobileDetailScreen" aria-label="Детали задания">
+    <header class="mobileDetailHeader">
+      <div>
+        <p class="eyebrow" id="mobileDetailSource"></p>
+        <h2 id="mobileDetailSticker"></h2>
+      </div>
+      <button class="mobileCloseButton" id="mobileCloseDetailBtn" type="button" aria-label="Закрыть">×</button>
+    </header>
+    <div class="mobileDetailContent">
+      <h3 id="mobileDetailName"></h3>
+      <div class="detailChips" id="mobileDetailChips"></div>
+      <dl class="mobileDetailGrid" id="mobileDetailGrid"></dl>
+      <section class="photoPanel">
+        <div class="photoPanelHeader">
+          <div><span>Фото</span><strong id="mobilePhotoCountLabel">0</strong></div>
+          <div class="photoButtons">
+            <button class="ghostButton" id="mobilePastePhotoBtn" type="button">Вставить</button>
+            <button class="ghostButton" id="mobileGalleryBtn" type="button">Галерея</button>
+            <button class="ghostButton" id="mobileCameraBtn" type="button">Камера</button>
+          </div>
+        </div>
+        <div class="photoStatus" id="mobilePhotoStatus"></div>
+        <div class="photoStrip" id="mobilePhotoStrip"></div>
+      </section>
+      <div class="message" id="mobileDetailMessage"></div>
+    </div>
+  </section>
+
+  <div class="appShell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Поиск товаров</p>
+        <h1>Активные задания</h1>
+      </div>
+      <div class="topActions">
+        <button class="reportTopButton" id="reportBtn" type="button">Отчёт</button>
+        <button class="reportTopButton" id="idStatsBtn" type="button">Статистика ID</button>
+        <button class="reportTopButton" id="analyticsBtn" type="button">Аналитика поиска</button>
+        <button class="userChip" id="userChip" type="button">ID</button>
+        <button class="iconButton" id="refreshBtn" type="button" aria-label="Обновить">↻</button>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <section class="controlPanel" aria-label="Фильтры">
+        <div class="statusLine">
+          <span id="syncText">Загрузка...</span>
+          <strong id="totalText">0</strong>
+        </div>
+        <div class="searchBox">
+          <span aria-hidden="true">⌕</span>
+          <input id="searchInput" type="search" placeholder="Стикер, товар, МХ, BOX" autocomplete="off">
+        </div>
+        <div class="segment" id="zoneTabs"></div>
+        <div class="quickFilters">
+          <button class="filterButton" id="myTasksToggle" type="button">Мои задания</button>
+          <button class="filterButton" id="photoFilterToggle" type="button">▣ С фото</button>
+        </div>
+        <div class="floorScroller" id="floorTabs"></div>
+        <div class="metrics">
+          <div><span id="metricActive">0</span><small>В поиске</small></div>
+          <div><span id="metricFloors">0</span><small>Этажей</small></div>
+          <div><span id="metricPhotos">0</span><small>Фото</small></div>
+        </div>
+      </section>
+
+      <section class="taskPane">
+        <div class="paneHeader">
+          <div>
+            <h2 id="paneTitle">Задания</h2>
+            <p id="paneMeta">Нет данных</p>
+          </div>
+        </div>
+        <div class="taskList" id="taskList"></div>
+      </section>
+
+      <div class="sheetBackdrop" id="sheetBackdrop"></div>
+      <aside class="detailPane" id="detailPane" aria-label="Карточка задания">
+        <button class="sheetHandle mobileOnly" id="sheetHandle" type="button" aria-label="Размер карточки"></button>
+        <div class="emptyDetail" id="emptyDetail">
+          <h2>Выберите карточку</h2>
+          <p>Детали задания откроются здесь.</p>
+        </div>
+
+        <article class="taskDetail hidden" id="taskDetail">
+          <div class="detailHeader">
+            <div>
+              <p class="eyebrow" id="detailSource"></p>
+              <h2 id="detailSticker"></h2>
+            </div>
+            <button class="iconButton mobileOnly" id="closeDetailBtn" type="button" aria-label="Закрыть">×</button>
+          </div>
+          <h3 id="detailName"></h3>
+          <div class="detailChips" id="detailChips"></div>
+          <dl class="detailGrid" id="detailGrid"></dl>
+
+          <section class="photoPanel">
+            <div class="photoPanelHeader">
+              <div><span>Фото</span><strong id="photoCountLabel">0</strong></div>
+              <div class="photoButtons">
+                <button class="ghostButton" id="pastePhotoBtn" type="button">Вставить</button>
+                <button class="ghostButton" id="galleryBtn" type="button">Галерея</button>
+                <button class="ghostButton" id="cameraBtn" type="button">Камера</button>
+              </div>
+            </div>
+            <input class="hidden" id="galleryInput" type="file" accept="image/*">
+            <input class="hidden" id="cameraInput" type="file" accept="image/*" capture="environment">
+            <div class="photoStatus" id="photoStatus"></div>
+            <div class="photoStrip" id="photoStrip"></div>
+          </section>
+
+          <div class="message" id="detailMessage"></div>
+          <div class="actions">
+            <button class="primaryButton" id="foundBtn" type="button">Найдено</button>
+            <button class="dangerButton" id="notFoundBtn" type="button">Не найдено</button>
+          </div>
+        </article>
+      </aside>
+    </main>
+  </div>
+
+  <nav class="mobileActionBar" id="mobileActionBar">
+    <button id="mobilePhotoBtn" type="button">Фото</button>
+    <button id="mobileFoundBtn" class="mobileFound" type="button">Найдено</button>
+    <button id="mobileNotFoundBtn" class="mobileNotFound" type="button">Не найдено</button>
+  </nav>
+
+  <div class="toastStack" id="toastStack" aria-live="polite"></div>
+
+  <div class="loadingOverlay hidden" id="loadingOverlay" role="status" aria-live="polite">
+    <div class="loadingBox">
+      <span class="loadingSpinner" aria-hidden="true"></span>
+      <strong id="loadingText">Загрузка...</strong>
+    </div>
+  </div>
+
+  <div class="reportModal hidden" id="reportModal" role="dialog" aria-modal="true" aria-label="Отчёт по поиску">
+    <div class="reportDialog">
+      <div class="reportHeader">
+        <div>
+          <p class="eyebrow" id="reportEyebrow">Отчёт</p>
+          <h2 id="reportTitle">Отчёт</h2>
+        </div>
+        <button class="iconButton" id="reportCloseBtn" type="button" aria-label="Закрыть">×</button>
+      </div>
+      <p class="reportHint">Вставьте строки из Google Таблицы. Можно с заголовками или без них.</p>
+      <textarea id="reportInput" class="reportTextarea" placeholder="Вставьте строки из Google Sheets"></textarea>
+      <div class="reportActions">
+        <button class="primaryButton" id="reportCalculateBtn" type="button">Посчитать</button>
+        <button class="ghostButton" id="reportCopyBtn" type="button">Скопировать отчёт</button>
+        <button class="ghostButton" id="reportClearBtn" type="button">Очистить</button>
+      </div>
+      <pre class="reportOutput" id="reportOutput"></pre>
+      <div class="message" id="reportMessage"></div>
+    </div>
+  </div>
+
+  <div class="reportModal hidden" id="idStatsModal" role="dialog" aria-modal="true" aria-label="Статистика ID">
+    <div class="reportDialog">
+      <div class="reportHeader">
+        <div>
+          <p class="eyebrow">Статистика поиска</p>
+          <h2>Статистика ID</h2>
+        </div>
+        <button class="iconButton" id="idStatsCloseBtn" type="button" aria-label="Закрыть">×</button>
+      </div>
+      <p class="reportHint">Вставьте список ID или диапазон из таблицы. Будут учтены только ID 5–8 цифр.</p>
+      <div class="quickFilters idStatsModes" id="idStatsModes">
+        <button class="filterButton active" type="button" data-id-mode="all">Все ID</button>
+        <button class="filterButton" type="button" data-id-mode="found">Только найдено</button>
+        <button class="filterButton" type="button" data-id-mode="missing">Только не найдено</button>
+      </div>
+      <textarea id="idStatsInput" class="reportTextarea" placeholder="Вставьте список ID"></textarea>
+      <div class="reportActions">
+        <button class="primaryButton" id="idStatsCalculateBtn" type="button">Посчитать</button>
+        <button class="ghostButton" id="idStatsCopyBtn" type="button">Скопировать</button>
+        <button class="ghostButton" id="idStatsClearBtn" type="button">Очистить</button>
+      </div>
+      <div class="idStatsSummary" id="idStatsSummary"></div>
+      <div class="idStatsRanking" id="idStatsOutput"></div>
+      <div class="message" id="idStatsMessage"></div>
+    </div>
+  </div>
+
+  <div class="reportModal hidden" id="analyticsModal" role="dialog" aria-modal="true" aria-label="Аналитика поиска">
+    <div class="reportDialog analyticsDialog">
+      <div class="reportHeader">
+        <div><p class="eyebrow">Готовая сводка</p><h2>Аналитика поиска</h2></div>
+        <button class="iconButton" id="analyticsCloseBtn" type="button" aria-label="Закрыть">×</button>
+      </div>
+      <div class="analyticsFilters">
+        <label>Период<select id="analyticsPeriod"><option value="today">Сегодня</option><option value="yesterday">Вчера</option><option value="week">Последние 7 дней</option><option value="date">Выбрать дату</option></select></label>
+        <input id="analyticsDate" type="date" hidden aria-label="Дата">
+        <label>Блок<select id="analyticsZone"><option value="all">Б3 + Б4</option><option value="B3">Б3</option><option value="B4">Б4</option></select></label>
+      </div>
+      <div class="analyticsNumbers"><div><span>Найдено</span><strong id="analyticsFound">—</strong></div><div><span>Не найдено</span><strong id="analyticsNotFound">—</strong></div></div>
+      <p class="reportHint" id="analyticsMeta" aria-live="polite">Статистика загружается только при открытии окна.</p>
+      <button class="ghostButton" id="analyticsReloadBtn" type="button">Обновить статистику</button>
+    </div>
+  </div>
+
+  <div class="photoViewer hidden" id="photoViewer">
+    <button class="photoViewerClose" id="photoViewerClose" type="button">×</button>
+    <img id="photoViewerImg" alt="">
+  </div>
+
+  <script>
+/* A retry verifies the SAME operation. It never sends another status write. */
+var pendingStatusOperations_ = {};
+function runStatusOperation_(payload, saved, failed, checking) {
+  var key = 'status-operation:' + payload.sheetName + ':' + payload.rowNumber + ':' + payload.wbSticker + ':' + payload.mx;
+  var pending = pendingStatusOperations_[key];
+  try { pending = pending || JSON.parse(localStorage.getItem(key) || 'null'); } catch (ignored) {}
+  var recovering = !!pending;
+  if (pending) payload = pending;
+  pendingStatusOperations_[key] = payload;
+  try { localStorage.setItem(key, JSON.stringify(payload)); } catch (ignored) {}
+  var startedAt = Date.now();
+  var settled = false, verifying = false, attempts = 0;
+  var timer = setTimeout(verify, 30000);
+  var deadline = setTimeout(function() { fail('Не удалось подтвердить сохранение. Повторное нажатие проверит ту же операцию.'); }, 120000);
+  function forget() {
+    if (pendingStatusOperations_[key] && pendingStatusOperations_[key].requestId === payload.requestId) {
+      delete pendingStatusOperations_[key];
+    }
+    try {
+      var stored = JSON.parse(localStorage.getItem(key) || 'null');
+      if (stored && stored.requestId === payload.requestId) localStorage.removeItem(key);
+    } catch (ignored) {}
+  }
+  function done(result) {
+    if (settled) return;
+    if (!result || result.ok !== true || result.requestId !== payload.requestId) { verify(); return; }
+    settled = true; clearTimeout(timer); clearTimeout(deadline);
+    forget();
+    saved(result);
+  }
+  function fail(message) {
+    if (settled) return;
+    settled = true; clearTimeout(timer); clearTimeout(deadline);
+    failed(new Error(message), payload.requestId);
+  }
+  function retry() {
+    verifying = false;
+    if (settled) return;
+    if (attempts < 6) {
+      var delay = Math.min(10000, 1000 * Math.pow(2, attempts));
+      // The last probe can fence an absent operation after its queueing grace.
+      if (attempts === 5) delay = Math.max(delay, 90000 - (Date.now() - startedAt));
+      timer = setTimeout(verify, delay);
+    }
+    else fail('Результат пока не подтверждён. Данные операции сохранены; повторное нажатие проверит результат.');
+  }
+  function verify() {
+    if (settled || verifying) return;
+    clearTimeout(timer); verifying = true; attempts++;
+    if (checking) checking();
+    google.script.run.withSuccessHandler(function(check) {
+      if (settled) return;
+      if (check && check.confirmed) done(check.result);
+      else if(check && check.aborted && check.requestId === payload.requestId) {
+        forget();
+        fail('Сервер отклонил запись; статус не изменён. Повторите действие.');
+      }
+      else retry();
+    }).withFailureHandler(retry).getTaskUpdateResult(payload, Date.now() - startedAt < 90000);
+  }
+  if (recovering) verify();
+  else google.script.run.withSuccessHandler(done).withFailureHandler(function(error) {
+    if (settled) return;
+    var message = String(error && error.message || error);
+    if (message.indexOf('STATUS_NOT_STARTED:') !== -1 || message.indexOf('Тайм-аут блокировки:') !== -1) {
+      forget();
+      fail(message.replace('STATUS_NOT_STARTED: ', ''));
+    } else verify();
+  }).updateTask(payload);
+}
+</script>
+
+  <script>
+(function() {
+  'use strict';
+
+  var EMPLOYEE_KEY = 'warehouse_saas_employee_id';
+  var AUTO_REFRESH_MS = 60000;
+  var TASK_LIST_STALE_AFTER_MS = 90000;
+  var state = {
+    tasks: [],
+    zoneStats: {},
+    generatedAt: '',
+    employeeId: '',
+    query: '',
+    zone: '',
+    floor: '',
+    photoOnly: false,
+    myOnly: false,
+    selectedKey: '',
+    sheetMode: 'half',
+    loading: false,
+    saving: false,
+    uploadBusy: false,
+    viewBusy: false,
+    reportBusy: false,
+    copyBusy: false,
+    idStatsBusy: false,
+    analyticsBusy: false,
+    idStatsMode: 'all',
+    idStatsText: '',
+    loadSequence: 0,
+    activeLoadRequestId: '',
+    consecutiveLoadFailures: 0,
+    lastTasksLoadedAt: 0,
+    refreshDeferred: false,
+    dataMayBeStale: false
+  };
+
+  var els = {};
+  var refreshTimer = null;
+  var photoCache = {};
+  var pendingPhotos = {};
+
+  document.addEventListener('DOMContentLoaded', init);
+
+  function init() {
+    bindEls();
+    bindEvents();
+    var phoneLayout = document.documentElement.classList.contains('phoneShell');
+    function refreshLayout() {
+      var nextLayout = document.documentElement.classList.contains('phoneShell');
+      if (nextLayout === phoneLayout) return;
+      phoneLayout = nextLayout;
+      if (state.employeeId) render();
+    }
+    window.addEventListener('resize', refreshLayout);
+    window.addEventListener('orientationchange', refreshLayout);
+    state.employeeId = loadEmployeeId();
+    window.addEventListener('error', function(event) {
+      writeTechnicalLog('CLIENT_ERROR', 'window.error', state.activeLoadRequestId, '', 0, 'JS_ERROR', event.message || 'Client error');
+    });
+    window.addEventListener('unhandledrejection', function(event) {
+      writeTechnicalLog('CLIENT_ERROR', 'unhandledrejection', state.activeLoadRequestId, '', 0, 'PROMISE_REJECTION', getErrorMessage(event.reason));
+    });
+    if (state.employeeId) {
+      hideLogin();
+      loadTasks({ silent: false, manual: false });
+    } else {
+      showLogin();
+    }
+  }
+
+  function bindEls() {
+    [
+      'loginScreen', 'loginForm', 'employeeLogin', 'loginMessage', 'userChip',
+      'mobileApp', 'mobileReportBtn', 'mobileIdStatsBtn', 'mobileAnalyticsBtn', 'mobileUserChip', 'mobileRefreshBtn',
+      'mobileSyncText', 'mobileTotalText', 'mobileSearchInput', 'mobileZoneTabs',
+      'mobileMyTasksToggle', 'mobilePhotoFilterToggle', 'mobileFloorTabs', 'mobileSummary',
+      'mobilePaneTitle', 'mobilePaneMeta', 'mobileTaskList', 'mobileDetailScreen',
+      'mobileDetailSource', 'mobileDetailSticker', 'mobileDetailName', 'mobileDetailChips',
+      'mobileDetailGrid', 'mobilePhotoCountLabel', 'mobilePastePhotoBtn', 'mobileGalleryBtn',
+      'mobileCameraBtn', 'mobilePhotoStatus', 'mobilePhotoStrip', 'mobileDetailMessage',
+      'mobileCloseDetailBtn',
+      'reportBtn', 'idStatsBtn', 'analyticsBtn', 'refreshBtn', 'syncText', 'totalText', 'searchInput', 'zoneTabs',
+      'myTasksToggle', 'photoFilterToggle', 'floorTabs', 'metricActive',
+      'metricFloors', 'metricPhotos', 'paneTitle', 'paneMeta', 'taskList',
+      'sheetBackdrop', 'detailPane', 'emptyDetail', 'taskDetail', 'sheetHandle', 'closeDetailBtn',
+      'detailSource', 'detailSticker', 'detailName', 'detailChips', 'detailGrid',
+      'photoCountLabel', 'pastePhotoBtn', 'galleryBtn', 'cameraBtn', 'galleryInput', 'cameraInput',
+      'photoStatus', 'photoStrip', 'detailMessage', 'foundBtn', 'notFoundBtn',
+      'mobileActionBar', 'mobilePhotoBtn', 'mobileFoundBtn', 'mobileNotFoundBtn',
+      'loadingOverlay', 'loadingText',
+      'toastStack', 'reportModal', 'reportEyebrow', 'reportTitle', 'reportCloseBtn',
+      'reportInput', 'reportCalculateBtn', 'reportCopyBtn', 'reportClearBtn',
+      'reportOutput', 'reportMessage', 'idStatsModal', 'idStatsCloseBtn', 'idStatsModes', 'idStatsInput',
+      'idStatsCalculateBtn', 'idStatsCopyBtn', 'idStatsClearBtn', 'idStatsOutput',
+      'idStatsSummary', 'idStatsMessage', 'analyticsModal', 'analyticsCloseBtn', 'analyticsPeriod',
+      'analyticsDate', 'analyticsZone', 'analyticsFound', 'analyticsNotFound', 'analyticsMeta',
+      'analyticsReloadBtn', 'photoViewer', 'photoViewerClose', 'photoViewerImg'
+    ].forEach(function(id) {
+      els[id] = document.getElementById(id);
+    });
+  }
+
+  function bindEvents() {
+    els.loginForm.addEventListener('submit', function(event) {
+      event.preventDefault();
+      var id = normalizeText(els.employeeLogin.value).toUpperCase();
+      if (!id) {
+        els.loginMessage.textContent = 'Укажите ID исполнителя.';
+        els.loginMessage.className = 'message error';
+        return;
+      }
+      state.employeeId = id;
+      try { localStorage.setItem(EMPLOYEE_KEY, id); } catch (ignored) {}
+      hideLogin();
+      loadTasks({ silent: false, manual: false });
+    });
+
+    els.userChip.addEventListener('click', function() {
+      els.employeeLogin.value = state.employeeId || '';
+      showLogin();
+    });
+    els.mobileUserChip.addEventListener('click', function() {
+      els.employeeLogin.value = state.employeeId || '';
+      showLogin();
+    });
+
+    document.addEventListener('visibilitychange', function() {
+      if (!document.hidden) loadTasks({ silent: true, reason: 'visible' });
+    });
+    document.addEventListener('paste', handlePasteImage);
+
+    els.refreshBtn.addEventListener('click', function() {
+      loadTasks({ silent: false, manual: true });
+    });
+    els.mobileRefreshBtn.addEventListener('click', function() {
+      loadTasks({ silent: false, manual: true });
+    });
+
+    els.reportBtn.addEventListener('click', openReportModal);
+    els.idStatsBtn.addEventListener('click', openIdStatsModal);
+    els.mobileReportBtn.addEventListener('click', openReportModal);
+    els.mobileIdStatsBtn.addEventListener('click', openIdStatsModal);
+    els.analyticsBtn.addEventListener('click', openAnalyticsModal);
+    els.mobileAnalyticsBtn.addEventListener('click', openAnalyticsModal);
+    els.reportCloseBtn.addEventListener('click', closeReportModal);
+    els.reportCalculateBtn.addEventListener('click', calculateReport);
+    els.reportCopyBtn.addEventListener('click', copyReport);
+    els.reportClearBtn.addEventListener('click', clearReport);
+    els.reportModal.addEventListener('click', function(event) {
+      if (event.target === els.reportModal) closeReportModal();
+    });
+    els.idStatsCloseBtn.addEventListener('click', closeIdStatsModal);
+    els.idStatsCalculateBtn.addEventListener('click', calculateIdStats);
+    els.idStatsCopyBtn.addEventListener('click', copyIdStats);
+    els.idStatsClearBtn.addEventListener('click', clearIdStats);
+    els.idStatsModal.addEventListener('click', function(event) {
+      if (event.target === els.idStatsModal) closeIdStatsModal();
+    });
+    els.analyticsCloseBtn.addEventListener('click', closeAnalyticsModal);
+    els.analyticsModal.addEventListener('click', function(event) {
+      if (event.target === els.analyticsModal) closeAnalyticsModal();
+    });
+    els.analyticsPeriod.addEventListener('change', function() {
+      els.analyticsDate.hidden = els.analyticsPeriod.value !== 'date';
+      fetchSearchAnalytics();
+    });
+    els.analyticsDate.addEventListener('change', fetchSearchAnalytics);
+    els.analyticsZone.addEventListener('change', fetchSearchAnalytics);
+    els.analyticsReloadBtn.addEventListener('click', fetchSearchAnalytics);
+    els.idStatsModes.addEventListener('click', function(event) {
+      var button = event.target.closest('[data-id-mode]');
+      if (!button) return;
+      state.idStatsMode = button.getAttribute('data-id-mode') || 'all';
+      Array.prototype.forEach.call(els.idStatsModes.querySelectorAll('button'), function(item) {
+        item.classList.toggle('active', item === button);
+      });
+      if (els.idStatsInput.value.trim()) calculateIdStats();
+    });
+
+    els.searchInput.addEventListener('input', debounce(function() {
+      state.query = normalizeText(els.searchInput.value).toLowerCase();
+      els.mobileSearchInput.value = els.searchInput.value;
+      render();
+    }, 220));
+    els.mobileSearchInput.addEventListener('input', debounce(function() {
+      state.query = normalizeText(els.mobileSearchInput.value).toLowerCase();
+      els.searchInput.value = els.mobileSearchInput.value;
+      render();
+    }, 220));
+
+    els.zoneTabs.addEventListener('click', function(event) {
+      var button = event.target.closest('[data-zone]');
+      if (!button) return;
+      transitionRender('Меняю блок...', function() {
+        state.zone = button.getAttribute('data-zone') || '';
+        state.floor = '';
+      });
+    });
+    els.mobileZoneTabs.addEventListener('click', function(event) {
+      var button = event.target.closest('[data-zone]');
+      if (!button) return;
+      transitionRender('Меняю блок...', function() {
+        state.zone = button.getAttribute('data-zone') || '';
+        state.floor = '';
+      });
+    });
+
+    els.floorTabs.addEventListener('click', function(event) {
+      var button = event.target.closest('[data-floor]');
+      if (!button) return;
+      transitionRender('Меняю этаж...', function() {
+        state.floor = button.getAttribute('data-floor') || '';
+      });
+    });
+    els.mobileFloorTabs.addEventListener('click', function(event) {
+      var button = event.target.closest('[data-floor]');
+      if (!button) return;
+      transitionRender('Меняю этаж...', function() {
+        state.floor = button.getAttribute('data-floor') || '';
+      });
+    });
+
+    els.myTasksToggle.addEventListener('click', function() {
+      transitionRender('Применяю фильтр...', function() {
+        state.myOnly = !state.myOnly;
+      });
+    });
+    els.mobileMyTasksToggle.addEventListener('click', function() {
+      transitionRender('Применяю фильтр...', function() {
+        state.myOnly = !state.myOnly;
+      });
+    });
+
+    els.photoFilterToggle.addEventListener('click', function() {
+      transitionRender('Применяю фильтр...', function() {
+        state.photoOnly = !state.photoOnly;
+      });
+    });
+    els.mobilePhotoFilterToggle.addEventListener('click', function() {
+      transitionRender('Применяю фильтр...', function() {
+        state.photoOnly = !state.photoOnly;
+      });
+    });
+
+    els.taskList.addEventListener('click', function(event) {
+      var card = event.target.closest('[data-key]');
+      if (!card) return;
+      selectTask(card.getAttribute('data-key'));
+    });
+    els.mobileTaskList.addEventListener('click', function(event) {
+      var card = event.target.closest('[data-key]');
+      if (!card) return;
+      selectTask(card.getAttribute('data-key'));
+    });
+
+    els.sheetBackdrop.addEventListener('click', clearSelection);
+    els.sheetHandle.addEventListener('click', function() {
+      state.sheetMode = state.sheetMode === 'half' ? 'full' : 'half';
+      updateSheetMode();
+    });
+
+    els.closeDetailBtn.addEventListener('click', clearSelection);
+    els.mobileCloseDetailBtn.addEventListener('click', clearSelection);
+    els.foundBtn.addEventListener('click', function() { closeTask('Найдено'); });
+    els.notFoundBtn.addEventListener('click', function() { closeTask('Не найдено'); });
+    els.mobileFoundBtn.addEventListener('click', function() { closeTask('Найдено'); });
+    els.mobileNotFoundBtn.addEventListener('click', function() { closeTask('Не найдено'); });
+    els.mobilePhotoBtn.addEventListener('click', function() { els.galleryInput.click(); });
+    els.pastePhotoBtn.addEventListener('click', pastePhotoFromClipboard);
+    els.mobilePastePhotoBtn.addEventListener('click', pastePhotoFromClipboard);
+    els.mobileGalleryBtn.addEventListener('click', function() { els.galleryInput.click(); });
+    els.mobileCameraBtn.addEventListener('click', function() { els.cameraInput.click(); });
+    els.galleryBtn.addEventListener('click', function() { els.galleryInput.click(); });
+    els.cameraBtn.addEventListener('click', function() { els.cameraInput.click(); });
+    els.galleryInput.addEventListener('change', handlePhotoInput);
+    els.cameraInput.addEventListener('change', handlePhotoInput);
+    els.photoViewerClose.addEventListener('click', closePhotoViewer);
+    els.photoViewer.addEventListener('click', function(event) {
+      if (event.target === els.photoViewer) closePhotoViewer();
+    });
+  }
+
+  function showLogin() {
+    els.loginScreen.classList.remove('hidden');
+    setTimeout(function() { els.employeeLogin.focus(); }, 40);
+  }
+
+  function hideLogin() {
+    els.loginScreen.classList.add('hidden');
+    els.userChip.textContent = state.employeeId || 'ID';
+    els.mobileUserChip.textContent = state.employeeId || 'ID';
+  }
+
+  function loadEmployeeId() {
+    try { return normalizeText(localStorage.getItem(EMPLOYEE_KEY) || ''); }
+    catch (ignored) { return ''; }
+  }
+
+  function loadTasks(options) {
+    options = options || {};
+    var silent = !!options.silent;
+    var manual = !!options.manual;
+    if (!state.employeeId || state.loading) return;
+    if (silent && shouldSkipBackgroundRefresh()) {
+      scheduleRefresh();
+      return;
+    }
+    if (silent && state.selectedKey && !options.force) {
+      deferOpenTaskRefresh_();
+      scheduleRefresh();
+      return;
+    }
+    var requestId = 'load-' + Date.now() + '-' + (++state.loadSequence);
+    var requestStartedAt = Date.now();
+    state.activeLoadRequestId = requestId;
+    state.loading = true;
+    setSync(silent ? 'Проверяю обновления...' : 'Загрузка...', '');
+    if (!silent || manual) {
+      showLoading(manual ? 'Обновляю таблицу...' : 'Загрузка данных...');
+      els.refreshBtn.disabled = true;
+      setControlsDisabled(true);
+    }
+    if (!silent) renderSkeleton();
+
+    var loadTimer = setTimeout(function() {
+      loadFailed(new Error('Нет ответа на загрузку. Предыдущий список сохранён.'));
+    }, 120000);
+    function loadFailed(error) {
+      if (requestId !== state.activeLoadRequestId) return;
+      state.activeLoadRequestId = '';
+      clearTimeout(loadTimer);
+      state.loading = false;
+      state.consecutiveLoadFailures += 1;
+      if (!silent || manual) {
+        els.refreshBtn.disabled = false;
+        setControlsDisabled(false);
+        hideLoading(getErrorMessage(error), 'error');
+      }
+      setSync('Ошибка загрузки', '');
+      showToast(getErrorMessage(error), 'error');
+      writeTechnicalLog('LOAD_ERROR', 'getTasks', requestId, '', Date.now() - requestStartedAt, 'GET_TASKS_FAILED', getErrorMessage(error));
+      if (!silent) render();
+      scheduleRefresh({ failed: true });
+    }
+
+    google.script.run
+      .withSuccessHandler(function(data) {
+        if (requestId !== state.activeLoadRequestId) return;
+        clearTimeout(loadTimer);
+        state.activeLoadRequestId = '';
+        state.loading = false;
+        state.consecutiveLoadFailures = 0;
+        if (!silent || manual) {
+          els.refreshBtn.disabled = false;
+          setControlsDisabled(false);
+        }
+        var hasTasks = !!data && Array.isArray(data.tasks);
+        var hasValidCount = hasTasks && typeof data.count === 'number' && data.count === data.tasks.length;
+        console.log('[LOAD_SUCCESS]', {
+          requestId: requestId,
+          dataType: typeof data,
+          keys: Object.keys(data || {}),
+          tasksIsArray: hasTasks,
+          tasksLength: hasTasks ? data.tasks.length : null
+        });
+        if (!hasTasks || !hasValidCount) {
+          var invalidMessage = 'Сервер вернул некорректный ответ. Ранее загруженные задания сохранены.';
+          setSync('Ошибка загрузки', '');
+          if (!silent || manual) hideLoading(invalidMessage, 'error');
+          showToast(invalidMessage, 'error');
+          writeTechnicalLog('INVALID_RESPONSE', 'loadTasks.successHandler', requestId, '', Date.now() - requestStartedAt, 'INVALID_TASKS_PAYLOAD', invalidMessage);
+          if (!silent) render();
+          scheduleRefresh();
+          return;
+        }
+        var nextTasks = data.tasks;
+        var nextGeneratedAt = data && data.generatedAt ? data.generatedAt : new Date().toISOString();
+        state.lastTasksLoadedAt = Date.now();
+        state.dataMayBeStale = isTaskPayloadStale_(data, nextGeneratedAt);
+        state.refreshDeferred = false;
+        var durationMs = Number(data.durationMs) || (Date.now() - requestStartedAt);
+        if (durationMs >= 45000) {
+          writeTechnicalLog('SLOW_REQUEST', 'getTasks', requestId, '', durationMs, 'SLOW_GET_TASKS', 'Медленная загрузка заданий');
+        }
+        if (silent && data.generatedAt && data.generatedAt === state.generatedAt) {
+          state.generatedAt = nextGeneratedAt;
+          setTaskListSyncStatus_();
+          scheduleRefresh();
+          return;
+        }
+        var scrollTop = els.taskList ? els.taskList.scrollTop : 0;
+        state.tasks = nextTasks;
+
+        state.zoneStats = data && data.zoneStats ? data.zoneStats : {};
+        state.generatedAt = nextGeneratedAt;
+        ensureZone();
+        ensureSelectionExists();
+        render();
+        if (silent && els.taskList) els.taskList.scrollTop = scrollTop;
+        setTaskListSyncStatus_();
+        if (!silent || manual) hideLoading('Готово', 'success');
+        scheduleRefresh();
+      })
+      .withFailureHandler(loadFailed)
+      .getTasks(requestId);
+  }
+
+  function writeTechnicalLog(eventType, functionName, requestId, zone, durationMs, errorCode, message) {
+    try {
+      google.script.run
+        .withFailureHandler(function() {})
+        .logClientEvent({
+          eventType: eventType,
+          functionName: functionName,
+          requestId: requestId || '',
+          zone: zone || state.zone || '',
+          clientInfo: navigator.userAgent || '',
+          durationMs: durationMs || 0,
+          errorCode: errorCode || '',
+          message: String(message || '').slice(0, 500)
+        });
+    } catch (ignored) {}
+  }
+
+  function shouldSkipBackgroundRefresh() {
+    return document.hidden || state.saving || state.uploadBusy || state.reportBusy || state.idStatsBusy;
+  }
+
+  function isTaskPayloadStale_(payload, generatedAt) {
+    if (!payload || payload.stale) return true;
+    var generatedMs = Date.parse(generatedAt || '');
+    return !generatedMs || Date.now() - generatedMs > TASK_LIST_STALE_AFTER_MS;
+  }
+
+  function isTaskListExpired_() {
+    if (state.dataMayBeStale) return true;
+    var generatedMs = Date.parse(state.generatedAt || '') || state.lastTasksLoadedAt;
+    return !generatedMs || Date.now() - generatedMs > TASK_LIST_STALE_AFTER_MS;
+  }
+
+  function deferOpenTaskRefresh_() {
+    if (!isTaskListExpired_()) return;
+    state.refreshDeferred = true;
+    state.dataMayBeStale = true;
+    setTaskListSyncStatus_();
+  }
+
+  function setTaskListSyncStatus_() {
+    setSync(isTaskListExpired_() ? 'Данные могут быть устаревшими' : 'Данные свежие', state.generatedAt);
+  }
+
+  function scheduleRefresh(options) {
+    if (refreshTimer) window.clearTimeout(refreshTimer);
+    var jitterMs = Math.floor(Math.random() * 15000);
+    var delay = document.hidden ? 300000 : AUTO_REFRESH_MS + jitterMs;
+    if (options && options.failed && !document.hidden && state.consecutiveLoadFailures <= 2) {
+      delay = 5000 * Math.pow(2, state.consecutiveLoadFailures - 1) + jitterMs;
+    }
+    refreshTimer = window.setTimeout(function() {
+      loadTasks({ silent: true });
+    }, delay);
+  }
+
+  function renderSkeleton() {
+    els.taskList.innerHTML = '<div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>';
+    els.mobileTaskList.innerHTML = '<div class="mobileSkeleton"></div><div class="mobileSkeleton"></div><div class="mobileSkeleton"></div>';
+    els.paneMeta.textContent = 'Загрузка карточек...';
+    els.mobilePaneMeta.textContent = 'Загрузка карточек...';
+  }
+
+  function transitionRender(label, mutate) {
+    if (state.viewBusy) return;
+    state.viewBusy = true;
+    setControlsDisabled(true);
+    setSync(label, '');
+    showLoading(label);
+    renderSkeleton();
+    window.setTimeout(function() {
+      mutate();
+      state.viewBusy = false;
+      setControlsDisabled(false);
+      render();
+      setTaskListSyncStatus_();
+      hideLoading('Готово', 'success');
+    }, 90);
+  }
+
+  function setControlsDisabled(disabled) {
+    [
+      els.refreshBtn, els.reportBtn, els.idStatsBtn, els.myTasksToggle, els.photoFilterToggle
+    ].forEach(function(button) {
+      if (button) button.disabled = disabled || state.loading;
+    });
+    Array.prototype.forEach.call(els.zoneTabs.querySelectorAll('button'), function(button) {
+      button.disabled = disabled;
+    });
+    Array.prototype.forEach.call(els.floorTabs.querySelectorAll('button'), function(button) {
+      button.disabled = disabled;
+    });
+  }
+
+  function render() {
+    ensureZone();
+    renderZones();
+    renderFloors();
+    renderMetrics();
+    if (!document.documentElement.classList.contains('phoneShell')) renderTaskList();
+    else els.taskList.textContent = '';
+    renderDetail();
+    renderMobile();
+  }
+
+  function ensureZone() {
+    var zones = getZones();
+    if (!state.zone || zones.indexOf(state.zone) === -1) {
+      state.zone = zones[0] || '';
+    }
+    var floors = getFloors();
+    if (state.floor && floors.indexOf(state.floor) === -1) state.floor = '';
+  }
+
+  function ensureSelectionExists() {
+    if (!state.selectedKey) return;
+    var exists = state.tasks.some(function(task) {
+      return taskKey(task) === state.selectedKey;
+    });
+    if (!exists) state.selectedKey = '';
+  }
+
+  function renderZones() {
+    var zones = getZones();
+    els.zoneTabs.innerHTML = zones.map(function(zone) {
+      var count = getZoneCount(zone);
+      return '<button class="zoneTab' + (zone === state.zone ? ' active' : '') + '" style="--zone:' + zoneColor(zone) + '" data-zone="' + escAttr(zone) + '" type="button">' +
+        '<strong>' + esc(zone) + '</strong><span>' + count + ' заданий</span></button>';
+    }).join('');
+  }
+
+  function renderFloors() {
+    var floors = getFloors();
+    var total = getFilteredTasksWithoutFloor().length;
+    var html = '<button class="floorTab' + (!state.floor ? ' active' : '') + '" data-floor="" type="button"><strong>Все</strong><span>' + total + '</span></button>';
+    html += floors.map(function(floor) {
+      var count = getFloorCount(floor);
+      return '<button class="floorTab' + (floor === state.floor ? ' active' : '') + '" data-floor="' + escAttr(floor) + '" type="button">' +
+        '<strong>' + esc(floor === 'Без этажа' ? floor : 'Этаж ' + floor) + '</strong><span>' + count + '</span></button>';
+    }).join('');
+    els.floorTabs.innerHTML = html;
+    els.myTasksToggle.classList.toggle('active', state.myOnly);
+    els.photoFilterToggle.classList.toggle('active', state.photoOnly);
+  }
+
+  function renderMetrics() {
+    var filtered = getFilteredTasks();
+    var floors = {};
+    var photos = 0;
+    filtered.forEach(function(task) {
+      floors[floorLabel(task.floor)] = true;
+      if (task.hasPhoto) photos += 1;
+    });
+    els.metricActive.textContent = filtered.length;
+    els.metricFloors.textContent = Object.keys(floors).length;
+    els.metricPhotos.textContent = photos;
+    els.totalText.textContent = state.tasks.length;
+    els.paneTitle.textContent = state.zone ? 'Задания ' + state.zone : 'Задания';
+    els.paneMeta.textContent = filtered.length ? 'Маршрут из ' + filtered.length + ' задач' : 'Нет задач в текущем фильтре';
+  }
+
+  function renderTaskList() {
+    var list = getFilteredTasks();
+    if (!list.length) {
+      els.taskList.innerHTML = '<div class="photoEmpty">Нет активных заданий по выбранным фильтрам.</div>';
+      renderEmptySummary();
+      return;
+    }
+    els.taskList.innerHTML = list.map(function(task, index) {
+      var key = taskKey(task);
+      var zone = task.zone || '';
+      var selected = key === state.selectedKey;
+      return '<button class="taskCard' + (selected ? ' selected' : '') + '" style="--zone:' + zoneColor(zone) + '" data-key="' + escAttr(key) + '" type="button">' +
+        '<div class="taskTop"><div class="sticker">' + stickerMarkup(task.wbSticker) + '</div><span class="zoneBadge" style="--zone:' + zoneColor(zone) + '">' + esc(zone || 'Зона') + '</span></div>' +
+        '<div class="taskMetaLine"><span class="routeBadge">Маршрут ' + (index + 1) + '/' + list.length + '</span>' +
+        '<span class="statusBadge">' + esc(task.statusSearch || 'Поиск') + '</span></div>' +
+        '<div class="taskName">' + esc(task.itemName || 'Без наименования') + '</div>' +
+        mxBlockMarkup(task) +
+        '<div class="chips">' +
+          chip('BOX', task.box) +
+          (task.manualTime ? '<span class="chip">Время ' + esc(task.manualTime) + '</span>' : '') +
+          (task.hasPhoto ? '<span class="photoBadge">Фото ' + esc(String(task.photoCount || 1)) + '</span>' : '') +
+          '<span class="openHint">Открыть</span>' +
+        '</div>' +
+      '</button>';
+    }).join('');
+  }
+
+  function renderMobile() {
+    renderMobileStatus();
+    renderMobileFilters();
+    if (document.documentElement.classList.contains('phoneShell')) renderMobileList();
+    else els.mobileTaskList.textContent = '';
+    renderMobileDetail();
+  }
+
+  function renderMobileStatus() {
+    var filtered = getFilteredTasks();
+    var floors = {};
+    var photos = 0;
+    filtered.forEach(function(task) {
+      floors[floorLabel(task.floor)] = true;
+      if (task.hasPhoto) photos += 1;
+    });
+    els.mobileTotalText.textContent = state.tasks.length;
+    els.mobilePaneTitle.textContent = state.zone ? 'Задания ' + state.zone : 'Задания';
+    els.mobilePaneMeta.textContent = filtered.length + ' карточек в текущем фильтре';
+    els.mobileSummary.textContent = filtered.length + ' в поиске · ' + Object.keys(floors).length + ' этажей · ' + photos + ' фото';
+  }
+
+  function renderMobileFilters() {
+    var zones = getZones();
+    els.mobileZoneTabs.innerHTML = zones.map(function(zone) {
+      var count = getZoneCount(zone);
+      return '<button class="mobileZoneButton' + (zone === state.zone ? ' active' : '') + '" style="--zone:' + zoneColor(zone) + '" data-zone="' + escAttr(zone) + '" type="button">' +
+        '<strong>' + esc(zone) + '</strong><span>' + count + '</span></button>';
+    }).join('');
+
+    var floors = getFloors();
+    var total = getFilteredTasksWithoutFloor().length;
+    var html = '<button class="mobileFloorButton' + (!state.floor ? ' active' : '') + '" data-floor="" type="button">Все <span>' + total + '</span></button>';
+    html += floors.map(function(floor) {
+      var count = getFloorCount(floor);
+      return '<button class="mobileFloorButton' + (floor === state.floor ? ' active' : '') + '" data-floor="' + escAttr(floor) + '" type="button">' +
+        esc(floor === 'Без этажа' ? floor : 'Этаж ' + floor) + ' <span>' + count + '</span></button>';
+    }).join('');
+    els.mobileFloorTabs.innerHTML = html;
+    els.mobileMyTasksToggle.classList.toggle('active', state.myOnly);
+    els.mobilePhotoFilterToggle.classList.toggle('active', state.photoOnly);
+  }
+
+  function renderMobileList() {
+    var list = getFilteredTasks();
+    if (!list.length) {
+      els.mobileTaskList.innerHTML = '<div class="mobileEmpty">Нет активных заданий по выбранным фильтрам.</div>';
+      return;
+    }
+    els.mobileTaskList.innerHTML = list.map(function(task, index) {
+      var key = taskKey(task);
+      var zone = task.zone || '';
+      return '<button class="mobileTaskCard" style="--zone:' + zoneColor(zone) + '" data-key="' + escAttr(key) + '" type="button">' +
+        '<div class="mobileStickerLine"><div class="mobileSticker">' + stickerMarkup(task.wbSticker) + '</div><span>' + esc(zone || 'Зона') + '</span></div>' +
+        '<div class="mobileRouteLine">Маршрут ' + (index + 1) + '/' + list.length + ' · ' + esc(zone || '') + '</div>' +
+        '<div class="mobileTaskName">' + esc(task.itemName || 'Без наименования') + '</div>' +
+        mxBlockMarkup(task) +
+        '<div class="mobileCardFooter">' +
+          (task.box ? '<span>BOX ' + esc(task.box) + '</span>' : '') +
+          (task.manualTime ? '<span>Время ' + esc(task.manualTime) + '</span>' : '') +
+          (task.hasPhoto ? '<span>Фото ' + esc(String(task.photoCount || 1)) + '</span>' : '') +
+          '<b>Открыть</b>' +
+        '</div>' +
+      '</button>';
+    }).join('');
+  }
+
+  function renderMobileDetail() {
+    var task = getSelectedTask();
+    if (!task) {
+      els.mobileDetailScreen.classList.add('hidden');
+      return;
+    }
+
+    var filtered = getFilteredTasks();
+    var routeIndex = filtered.findIndex(function(item) { return taskKey(item) === state.selectedKey; });
+    var routeText = routeIndex >= 0 ? 'Маршрут ' + (routeIndex + 1) + '/' + filtered.length : 'Вне текущего фильтра';
+    var zone = task.zone || '';
+    els.mobileDetailScreen.classList.remove('hidden');
+    els.mobileDetailSource.textContent = (task.sourceLabel || task.sheetName || '') + ' · ' + routeText;
+    els.mobileDetailSticker.innerHTML = stickerMarkup(task.wbSticker);
+    els.mobileDetailName.textContent = task.itemName || 'Без наименования';
+    els.mobileDetailChips.innerHTML =
+      '<span class="zoneBadge" style="--zone:' + zoneColor(zone) + '">' + esc(zone || 'Зона') + '</span>' +
+      '<span class="routeBadge">' + esc(routeText) + '</span>' +
+      '<span class="statusBadge">' + esc(task.statusSearch || 'Поиск') + '</span>' +
+      (task.hasPhoto ? '<span class="photoBadge">Фото ' + esc(String(task.photoCount || 1)) + '</span>' : '');
+    els.mobileDetailGrid.innerHTML = detailCell('МХ', task.mx) + detailCell('BOX', task.box) +
+      detailCell('Этаж', task.floor) + detailCell('Ряд', task.row) +
+      detailCell('Место', task.place) + detailCell('Полка', task.shelf) +
+      detailCell('Ячейка', task.cell) + detailCell('Время', task.manualTime || task.timeFilled) +
+      detailCell('Исполнитель', task.employeeId || 'Свободно') + detailCell('Действие', task.action);
+    els.mobilePhotoCountLabel.textContent = String(task.photoCount || 0);
+    els.mobileDetailMessage.textContent = '';
+    renderMobilePhotos(task);
+  }
+
+  function renderDetail() {
+    var task = getSelectedTask();
+    var filtered = getFilteredTasks();
+    if (!task) {
+      els.taskDetail.classList.add('hidden');
+      els.emptyDetail.classList.remove('hidden');
+      els.detailPane.classList.remove('hasSelection', 'open', 'half', 'full');
+      els.sheetBackdrop.classList.remove('visible');
+      document.documentElement.classList.remove('sheetLocked');
+      els.mobileActionBar.classList.remove('visible');
+      renderEmptySummary();
+      return;
+    }
+
+    var routeIndex = filtered.findIndex(function(item) { return taskKey(item) === state.selectedKey; });
+    var routeText = routeIndex >= 0 ? 'Маршрут ' + (routeIndex + 1) + '/' + filtered.length : 'Вне текущего фильтра';
+    var zone = task.zone || '';
+
+    els.emptyDetail.classList.add('hidden');
+    els.taskDetail.classList.remove('hidden');
+    els.taskDetail.style.setProperty('--zone', zoneColor(zone));
+    els.detailPane.classList.add('hasSelection', 'open', state.sheetMode);
+    els.detailPane.classList.toggle('full', state.sheetMode === 'full');
+    els.detailPane.classList.toggle('half', state.sheetMode !== 'full');
+    if (isOverlayMode()) {
+      els.sheetBackdrop.classList.add('visible');
+      document.documentElement.classList.add('sheetLocked');
+      els.mobileActionBar.classList.add('visible');
+    } else {
+      els.sheetBackdrop.classList.remove('visible');
+      document.documentElement.classList.remove('sheetLocked');
+      els.mobileActionBar.classList.remove('visible');
+    }
+
+    els.detailSource.textContent = (task.sourceLabel || task.sheetName || '') + ' • ' + routeText;
+    els.detailSticker.innerHTML = stickerMarkup(task.wbSticker);
+    els.detailName.textContent = task.itemName || 'Без наименования';
+    els.detailChips.innerHTML =
+      '<span class="zoneBadge" style="--zone:' + zoneColor(zone) + '">' + esc(zone || 'Зона') + '</span>' +
+      '<span class="routeBadge">' + esc(routeText) + '</span>' +
+      '<span class="statusBadge">' + esc(task.statusSearch || 'Поиск') + '</span>' +
+      (task.hasPhoto ? '<span class="photoBadge">Фото ' + esc(String(task.photoCount || 1)) + '</span>' : '');
+    els.detailGrid.innerHTML = detailCell('МХ', task.mx) + detailCell('BOX', task.box) +
+      detailCell('Этаж', task.floor) + detailCell('Ряд', task.row) +
+      detailCell('Место', task.place) + detailCell('Полка', task.shelf) +
+      detailCell('Ячейка', task.cell) + detailCell('Время', task.manualTime || task.timeFilled) +
+      detailCell('Исполнитель', task.employeeId || 'Свободно') + detailCell('Действие', task.action);
+    els.photoCountLabel.textContent = String(task.photoCount || 0);
+    els.detailMessage.textContent = '';
+    els.detailMessage.className = 'message';
+    renderPhotos(task);
+  }
+
+  function renderEmptySummary() {
+    var filtered = getFilteredTasks();
+    var my = filtered.filter(function(task) {
+      return normalizeText(task.employeeId).toUpperCase() === state.employeeId;
+    }).length;
+    var photos = filtered.filter(function(task) { return !!task.hasPhoto; }).length;
+    els.emptyDetail.innerHTML =
+      '<h2>Выберите карточку</h2><p>Детали задания откроются здесь.</p>' +
+      '<div class="summaryGrid">' +
+        '<div class="summaryCell"><b>' + filtered.length + '</b><span>В фильтре</span></div>' +
+        '<div class="summaryCell"><b>' + my + '</b><span>Мои</span></div>' +
+        '<div class="summaryCell"><b>' + photos + '</b><span>С фото</span></div>' +
+        '<div class="summaryCell"><b>' + esc(state.zone || 'Все') + '</b><span>Зона</span></div>' +
+      '</div>';
+  }
+
+  function renderPhotos(task) {
+    var ids = getPhotoIds(task);
+    els.photoStatus.textContent = ids.length ? 'Нажмите на фото для просмотра.' : 'Фото пока не добавлено.';
+    if (!ids.length) {
+      els.photoStrip.innerHTML = '<div class="photoEmpty">Нет фото</div>';
+      return;
+    }
+    els.photoStrip.innerHTML = ids.map(function(id) {
+      var dataUrl = photoCache[id];
+      if (dataUrl) {
+        return '<button class="photoThumb" data-photo="' + escAttr(id) + '" type="button"><img src="' + escAttr(dataUrl) + '" alt=""></button>';
+      }
+      return '<button class="photoThumb" data-photo="' + escAttr(id) + '" type="button"><span class="photoEmpty">...</span></button>';
+    }).join('');
+
+    Array.prototype.forEach.call(els.photoStrip.querySelectorAll('[data-photo]'), function(button) {
+      button.addEventListener('click', function() {
+        var id = button.getAttribute('data-photo');
+        if (photoCache[id]) {
+          openPhotoViewer(photoCache[id]);
+        } else {
+          loadPhoto(task, id, true);
+        }
+      });
+    });
+
+    ids.forEach(function(id) {
+      if (!photoCache[id]) {
+        loadPhoto(task, id, false);
+      }
+    });
+  }
+
+  function renderMobilePhotos(task) {
+    var ids = getPhotoIds(task);
+    els.mobilePhotoStatus.textContent = ids.length ? 'Нажмите на фото для просмотра.' : 'Фото пока не добавлено.';
+    if (!ids.length) {
+      els.mobilePhotoStrip.innerHTML = '<div class="photoEmpty">Нет фото</div>';
+      return;
+    }
+    els.mobilePhotoStrip.innerHTML = ids.map(function(id) {
+      var dataUrl = photoCache[id];
+      if (dataUrl) {
+        return '<button class="photoThumb" data-photo="' + escAttr(id) + '" type="button"><img src="' + escAttr(dataUrl) + '" alt=""></button>';
+      }
+      return '<button class="photoThumb" data-photo="' + escAttr(id) + '" type="button"><span class="photoEmpty">...</span></button>';
+    }).join('');
+
+    Array.prototype.forEach.call(els.mobilePhotoStrip.querySelectorAll('[data-photo]'), function(button) {
+      button.addEventListener('click', function() {
+        var id = button.getAttribute('data-photo');
+        if (photoCache[id]) {
+          openPhotoViewer(photoCache[id]);
+        } else {
+          loadPhoto(task, id, true);
+        }
+      });
+    });
+
+    ids.forEach(function(id) {
+      if (!photoCache[id]) {
+        loadPhoto(task, id, false);
+      }
+    });
+  }
+
+  function loadPhoto(task, fileId, openViewer) {
+    var key = JSON.stringify([taskKey(task), fileId]);
+    if (pendingPhotos[key] && Date.now() - pendingPhotos[key].startedAt < 60000) {
+      if (openViewer) pendingPhotos[key].openViewer = true;
+      return;
+    }
+    var pending = pendingPhotos[key] = { openViewer: openViewer, startedAt: Date.now() };
+    google.script.run
+      .withSuccessHandler(function(data) {
+        if (pendingPhotos[key] !== pending) return;
+        delete pendingPhotos[key];
+        if (!data || !data.base64) {
+          els.mobilePhotoStatus.textContent = els.photoStatus.textContent = 'Не удалось загрузить фото.';
+          return;
+        }
+        var dataUrl = 'data:' + (data.mimeType || 'image/jpeg') + ';base64,' + data.base64;
+        photoCache[fileId] = dataUrl;
+        if (state.selectedKey !== taskKey(task)) return;
+        renderPhotos(task);
+        renderMobilePhotos(task);
+        if (pending.openViewer) openPhotoViewer(dataUrl);
+      })
+      .withFailureHandler(function(error) {
+        if (pendingPhotos[key] !== pending) return;
+        delete pendingPhotos[key];
+        if (state.selectedKey === taskKey(task)) els.mobilePhotoStatus.textContent = els.photoStatus.textContent = getErrorMessage(error);
+        writeTechnicalLog('PHOTO_ERROR', 'getTaskPhotoData', '', state.zone, 0, 'PHOTO_READ_FAILED', getErrorMessage(error));
+      })
+      .getTaskPhotoData({
+        sheetName: task.sheetName,
+        rowNumber: task.rowNumber,
+        fileId: fileId
+      });
+  }
+
+  function handlePhotoInput(event) {
+    var file = event.target.files && event.target.files[0];
+    event.target.value = '';
+    if (!file) return;
+    uploadPhoto(file, 'file');
+  }
+
+  function handlePasteImage(event) {
+    var items = event.clipboardData && event.clipboardData.items;
+    if (!items || !items.length) return;
+    for (var i = 0; i < items.length; i += 1) {
+      var item = items[i];
+      if (item.type && item.type.indexOf('image/') === 0) {
+        event.preventDefault();
+        uploadPhoto(item.getAsFile(), 'clipboard');
+        return;
+      }
+    }
+  }
+
+  function pastePhotoFromClipboard() {
+    if (!navigator.clipboard || !navigator.clipboard.read) {
+      showToast('Нажмите Ctrl+V или Cmd+V, чтобы вставить фото из буфера.', 'error');
+      return;
+    }
+    if (!getSelectedTask()) {
+      showToast('Откройте карточку, чтобы вставить фото.', 'error');
+      return;
+    }
+    showLoading('Читаю буфер обмена...');
+    navigator.clipboard.read().then(function(items) {
+      for (var i = 0; i < items.length; i += 1) {
+        var types = items[i].types || [];
+        for (var j = 0; j < types.length; j += 1) {
+          if (types[j].indexOf('image/') === 0) {
+            items[i].getType(types[j]).then(function(blob) {
+              var file = new File([blob], 'clipboard-photo.png', { type: blob.type || 'image/png' });
+              uploadPhoto(file, 'clipboard');
+            });
+            return;
+          }
+        }
+      }
+      hideLoading('Готово', 'success');
+      showToast('В буфере обмена нет изображения.', 'error');
+    }).catch(function(error) {
+      hideLoading(getErrorMessage(error), 'error');
+      showToast('Не удалось прочитать буфер. Используйте Ctrl+V / Cmd+V.', 'error');
+    });
+  }
+
+  function uploadPhoto(file, source) {
+    var task = getSelectedTask();
+    if (!task) {
+      showToast(source === 'clipboard' ? 'Откройте карточку, чтобы вставить фото.' : 'Сначала выберите задание.', 'error');
+      return;
+    }
+    if (!file) return;
+    if (!/^image\//.test(file.type || '')) {
+      showToast('Можно загрузить только изображение.', 'error');
+      return;
+    }
+    if (state.uploadBusy) return;
+    state.uploadBusy = true;
+    els.photoStatus.textContent = 'Сжимаю фото...';
+    showLoading('Подготавливаю фото...');
+    compressImage(file, function(dataUrl) {
+      els.photoStatus.textContent = 'Загружаю фото...';
+      showLoading('Загружаю фото...');
+      google.script.run
+        .withSuccessHandler(function(result) {
+          state.uploadBusy = false;
+          hideLoading('Фото загружено', 'success');
+          var ids = result && result.fileIds ? result.fileIds : [];
+          task.photoFileIds = ids;
+          task.photoFileId = ids[0] || '';
+          task.photoCount = ids.length;
+          task.hasPhoto = ids.length > 0;
+          els.photoStatus.textContent = 'Фото загружено.';
+          els.mobilePhotoStatus.textContent = 'Фото загружено.';
+          showToast('Фото добавлено');
+          render();
+        })
+        .withFailureHandler(function(error) {
+          state.uploadBusy = false;
+          hideLoading(getErrorMessage(error), 'error');
+          els.photoStatus.textContent = getErrorMessage(error);
+          els.mobilePhotoStatus.textContent = getErrorMessage(error);
+          showToast(getErrorMessage(error), 'error');
+          writeTechnicalLog('PHOTO_ERROR', 'uploadTaskPhoto', '', task.zone, 0, 'PHOTO_UPLOAD_FAILED', getErrorMessage(error));
+        })
+        .uploadTaskPhoto({
+          sheetName: task.sheetName,
+          rowNumber: task.rowNumber,
+          wbSticker: task.wbSticker,
+          mx: task.mx,
+          employeeId: state.employeeId,
+          fileName: file.name || 'photo.jpg',
+          mimeType: 'image/jpeg',
+          dataUrl: dataUrl
+        });
+    }, function(error) {
+      state.uploadBusy = false;
+      hideLoading(error, 'error');
+      els.photoStatus.textContent = error;
+      els.mobilePhotoStatus.textContent = error;
+    });
+  }
+
+  function closeTask(status) {
+    var task = getSelectedTask();
+    if (!task || state.saving) return;
+    if (!state.employeeId) {
+      showLogin();
+      return;
+    }
+    state.saving = true;
+    setActionBusy(true);
+    setSavingLabels(true);
+    showLoading('Сохраняю результат...');
+    els.detailMessage.textContent = 'Записываю результат в Google Таблицу...';
+    els.mobileDetailMessage.textContent = 'Записываю результат в Google Таблицу...';
+    els.detailMessage.className = 'message';
+    els.mobileDetailMessage.className = 'message';
+
+    var saveStartedAt = Date.now();
+    var operation = {
+      requestId: 'status-' + Date.now() + '-' + Math.random().toString(36).slice(2, 9),
+      sheetName: task.sheetName, rowNumber: task.rowNumber,
+      wbSticker: task.wbSticker, mx: task.mx, newStatus: status, employeeId: state.employeeId
+    };
+    function saved(result) {
+        state.saving = false;
+        setActionBusy(false);
+        setSavingLabels(false);
+        hideLoading('Сохранено', 'success');
+        removeTask(task);
+        showToast(result && result.message ? result.message : 'Задание закрыто');
+        var next = getFilteredTasks()[0];
+        state.selectedKey = next ? taskKey(next) : '';
+        render();
+    }
+    function failed(error, failedRequestId) {
+        state.saving = false;
+        setActionBusy(false);
+        setSavingLabels(false);
+        hideLoading(getErrorMessage(error), 'error');
+        els.detailMessage.textContent = getErrorMessage(error);
+        els.detailMessage.className = 'message error';
+        els.mobileDetailMessage.textContent = getErrorMessage(error);
+        els.mobileDetailMessage.className = 'message error';
+        showToast(getErrorMessage(error), 'error');
+        writeTechnicalLog('STATUS_ERROR', 'updateTask', failedRequestId || operation.requestId, task.zone, Date.now() - saveStartedAt, 'STATUS_UPDATE_FAILED', getErrorMessage(error));
+    }
+    function checking() {
+      els.detailMessage.textContent = 'Проверяю результат сохранения...';
+      els.mobileDetailMessage.textContent = 'Проверяю результат сохранения...';
+    }
+    runStatusOperation_(operation, saved, failed, checking);
+  }
+
+  function openAnalyticsModal() {
+    els.analyticsModal.classList.remove('hidden');
+    fetchSearchAnalytics();
+  }
+
+  function closeAnalyticsModal() {
+    if (state.analyticsBusy) return;
+    els.analyticsModal.classList.add('hidden');
+  }
+
+  function fetchSearchAnalytics() {
+    if (state.analyticsBusy || els.analyticsModal.classList.contains('hidden')) return;
+    if (els.analyticsPeriod.value === 'date' && !els.analyticsDate.value) {
+      els.analyticsMeta.textContent = 'Выберите дату.';
+      return;
+    }
+    state.analyticsBusy = true;
+    els.analyticsReloadBtn.disabled = true;
+    els.analyticsMeta.textContent = 'Получаю готовую сводку…';
+    google.script.run
+      .withSuccessHandler(function(result) {
+        state.analyticsBusy = false;
+        els.analyticsReloadBtn.disabled = false;
+        els.analyticsFound.textContent = result && result.ready ? String(result.found) : '—';
+        els.analyticsNotFound.textContent = result && result.ready ? String(result.notFound) : '—';
+        els.analyticsMeta.textContent = result && result.ready
+          ? ('Обновлено: ' + (result.updatedAt || 'нет событий') + ' · МСК' +
+            (result.incomplete ? ' · Неполных событий: ' + result.incomplete : (result.complete === false ? ' · Данные за период неполные' : '')))
+          : ((result && result.message) || 'Нет данных.');
+      })
+      .withFailureHandler(function(error) {
+        state.analyticsBusy = false;
+        els.analyticsReloadBtn.disabled = false;
+        els.analyticsMeta.textContent = 'Ошибка статистики: ' + getErrorMessage(error);
+      })
+      .getSearchAnalytics({period: els.analyticsPeriod.value, date: els.analyticsDate.value, zone: els.analyticsZone.value});
+  }
+
+  function setActionBusy(busy) {
+    [els.foundBtn, els.notFoundBtn, els.mobileFoundBtn, els.mobileNotFoundBtn].forEach(function(button) {
+      button.disabled = busy;
+    });
+  }
+
+  function setSavingLabels(busy) {
+    els.foundBtn.textContent = busy ? 'Сохраняю...' : 'Найдено';
+    els.notFoundBtn.textContent = busy ? 'Сохраняю...' : 'Не найдено';
+    els.mobileFoundBtn.textContent = busy ? 'Сохраняю...' : 'Найдено';
+    els.mobileNotFoundBtn.textContent = busy ? 'Сохраняю...' : 'Не найдено';
+  }
+
+  function removeTask(task) {
+    var key = taskKey(task);
+    state.tasks = state.tasks.filter(function(item) {
+      return taskKey(item) !== key;
+    });
+  }
+
+  function selectTask(key) {
+    if (state.viewBusy) return;
+    setSync('Открываю карточку...', '');
+    showLoading('Открываю карточку...');
+    state.selectedKey = key;
+    state.sheetMode = document.documentElement.classList.contains('phoneShell') ? 'full' : 'half';
+    render();
+    setTaskListSyncStatus_();
+    window.setTimeout(hideLoading, 120);
+  }
+
+  function isOverlayMode() {
+    return document.documentElement.classList.contains('phoneShell') || window.innerWidth <= 1040;
+  }
+
+  function clearSelection() {
+    var needsRefresh = state.refreshDeferred || isTaskListExpired_();
+    state.selectedKey = '';
+    render();
+    if (needsRefresh) loadTasks({ silent: true, force: true, reason: 'selection_closed' });
+  }
+
+  function updateSheetMode() {
+    els.detailPane.classList.toggle('full', state.sheetMode === 'full');
+    els.detailPane.classList.toggle('half', state.sheetMode !== 'full');
+  }
+
+  function getSelectedTask() {
+    if (!state.selectedKey) return null;
+    for (var i = 0; i < state.tasks.length; i += 1) {
+      if (taskKey(state.tasks[i]) === state.selectedKey) return state.tasks[i];
+    }
+    return null;
+  }
+
+  function getZoneCount(zone) {
+    return state.tasks.filter(function(task) {
+      if (task.zone !== zone) return false;
+      if (state.photoOnly && !task.hasPhoto) return false;
+      if (state.myOnly && normalizeText(task.employeeId).toUpperCase() !== state.employeeId) return false;
+      if (!state.query) return true;
+      return taskMatchesQuery(task, state.query);
+    }).length;
+  }
+
+  function getFloorCount(floor) {
+    return getFilteredTasksWithoutFloor().filter(function(task) {
+      return floorLabel(task.floor) === floor;
+    }).length;
+  }
+
+  function getFilteredTasksWithoutFloor() {
+    var q = state.query;
+    return state.tasks.filter(function(task) {
+      if (state.zone && task.zone !== state.zone) return false;
+      if (state.photoOnly && !task.hasPhoto) return false;
+      if (state.myOnly && normalizeText(task.employeeId).toUpperCase() !== state.employeeId) return false;
+      if (!q) return true;
+      return taskMatchesQuery(task, q);
+    });
+  }
+
+  function getFilteredTasks() {
+    var q = state.query;
+    return state.tasks.filter(function(task) {
+      if (state.zone && task.zone !== state.zone) return false;
+      if (state.floor && floorLabel(task.floor) !== state.floor) return false;
+      if (state.photoOnly && !task.hasPhoto) return false;
+      if (state.myOnly && normalizeText(task.employeeId).toUpperCase() !== state.employeeId) return false;
+      if (!q) return true;
+      return taskMatchesQuery(task, q);
+    });
+  }
+
+  function taskMatchesQuery(task, q) {
+    return [
+      task.wbSticker, task.itemName, task.mx, task.box, task.floor, task.row,
+      task.place, task.shelf, task.cell, task.action, task.sourceLabel
+    ].join(' ').toLowerCase().indexOf(q) !== -1;
+  }
+
+  function getZones() {
+    var seen = {};
+    var zones = [];
+    state.tasks.forEach(function(task) {
+      var zone = task.zone || '';
+      if (zone && !seen[zone]) {
+        seen[zone] = true;
+        zones.push(zone);
+      }
+    });
+    return zones.sort(function(a, b) {
+      return zoneOrder(a) - zoneOrder(b) || a.localeCompare(b);
+    });
+  }
+
+  function getFloors() {
+    var seen = {};
+    getFilteredTasksWithoutFloor().forEach(function(task) {
+      seen[floorLabel(task.floor)] = true;
+    });
+    return Object.keys(seen).sort(compareNatural);
+  }
+
+  function getPhotoIds(task) {
+    if (Array.isArray(task.photoFileIds) && task.photoFileIds.length) return task.photoFileIds;
+    return task.photoFileId ? [task.photoFileId] : [];
+  }
+
+  function taskKey(task) {
+    return JSON.stringify([task.sheetName, task.rowNumber, String(task.wbSticker), String(task.mx)]);
+  }
+
+  function chip(label, value) {
+    if (!normalizeText(value)) return '';
+    return '<span class="chip">' + esc(label) + ' ' + esc(value) + '</span>';
+  }
+
+  function mxBlockMarkup(task) {
+    var mx = normalizeText(task.mx) || '—';
+    var route = [
+      task.floor ? 'Этаж ' + task.floor : '',
+      task.row ? 'Ряд ' + task.row : '',
+      task.place ? 'Место ' + task.place : '',
+      task.shelf ? 'Полка ' + task.shelf : '',
+      task.cell ? 'Ячейка ' + task.cell : ''
+    ].filter(Boolean).join(' · ');
+    return '<div class="mxBlock"><span>МХ</span><strong>' + esc(mx) + '</strong>' +
+      (route ? '<small>' + esc(route) + '</small>' : '') + '</div>';
+  }
+
+  function detailCell(label, value) {
+    return '<div><dt>' + esc(label) + '</dt><dd>' + esc(normalizeText(value) || '—') + '</dd></div>';
+  }
+
+  function stickerMarkup(value) {
+    var text = normalizeText(value);
+    if (!text) return '<span>—</span>';
+    if (text.length <= 4) return '<span class="stickerTail">' + esc(text) + '</span>';
+    return esc(text.slice(0, -4)) + '<span class="stickerTail">' + esc(text.slice(-4)) + '</span>';
+  }
+
+  function floorLabel(value) {
+    var text = normalizeText(value);
+    return text || 'Без этажа';
+  }
+
+  function zoneOrder(zone) {
+    var order = { B3: 10, B4: 20, B5: 30, 'OPP AS': 40, 'Ревизия': 50 };
+    return order[zone] || 90;
+  }
+
+  function zoneColor(zone) {
+    var colors = {
+      B3: '#1d4f91',
+      B4: '#176b4d',
+      B5: '#b27918',
+      'OPP AS': '#374151',
+      'Ревизия': '#6b3a78'
+    };
+    return colors[zone] || '#1d4f91';
+  }
+
+  function compareNatural(a, b) {
+    var an = Number(String(a).match(/\d+/));
+    var bn = Number(String(b).match(/\d+/));
+    if (!isNaN(an) && !isNaN(bn) && an !== bn) return an - bn;
+    return String(a).localeCompare(String(b), 'ru');
+  }
+
+  function openReportModal() {
+    var zone = state.zone || 'выбранному блоку';
+    els.reportEyebrow.textContent = 'Помощник отчёта';
+    els.reportTitle.textContent = 'Отчёт ' + zone;
+    els.reportModal.classList.remove('hidden');
+    document.documentElement.classList.add('sheetLocked');
+    window.setTimeout(function() { els.reportInput.focus(); }, 40);
+  }
+
+  function closeReportModal() {
+    els.reportModal.classList.add('hidden');
+    if (!els.detailPane.classList.contains('hasSelection') && els.idStatsModal.classList.contains('hidden')) {
+      document.documentElement.classList.remove('sheetLocked');
+    }
+  }
+
+  function clearReport() {
+    els.reportInput.value = '';
+    els.reportOutput.textContent = '';
+    els.reportMessage.textContent = '';
+    els.reportMessage.className = 'message';
+  }
+
+  function openIdStatsModal() {
+    els.idStatsModal.classList.remove('hidden');
+    document.documentElement.classList.add('sheetLocked');
+    window.setTimeout(function() { els.idStatsInput.focus(); }, 40);
+  }
+
+  function closeIdStatsModal() {
+    els.idStatsModal.classList.add('hidden');
+    if (!els.detailPane.classList.contains('hasSelection') && els.reportModal.classList.contains('hidden')) {
+      document.documentElement.classList.remove('sheetLocked');
+    }
+  }
+
+  function clearIdStats() {
+    els.idStatsInput.value = '';
+    state.idStatsText = '';
+    els.idStatsOutput.innerHTML = '';
+    els.idStatsSummary.innerHTML = '';
+    els.idStatsMessage.textContent = '';
+    els.idStatsMessage.className = 'message';
+  }
+
+  function calculateIdStats() {
+    if (state.idStatsBusy) return;
+    state.idStatsBusy = true;
+    setIdStatsBusy(true, 'Считаю...');
+    showLoading('Считаю статистику ID...');
+    window.setTimeout(function() {
+      var ids = extractIdsForStats(els.idStatsInput.value || '', state.idStatsMode);
+      if (!ids.length) {
+        els.idStatsMessage.textContent = 'Не нашёл ID 5–8 цифр. Проверьте вставленный список.';
+        els.idStatsMessage.className = 'message error';
+        els.idStatsOutput.textContent = '';
+        state.idStatsBusy = false;
+        setIdStatsBusy(false);
+        hideLoading('Не найдено ID', 'error');
+        return;
+      }
+
+      var result = buildIdStatsText(ids);
+      state.idStatsText = result.text;
+      els.idStatsSummary.innerHTML = '<div><b>' + ids.length + '</b><span>строк</span></div><div><b>' + result.unique + '</b><span>уникальных ID</span></div>';
+      els.idStatsOutput.innerHTML = buildIdStatsRankingMarkup(result.rows);
+      els.idStatsMessage.textContent = 'Посчитано ID: ' + ids.length + ', уникальных: ' + result.unique + '.';
+      els.idStatsMessage.className = 'message success';
+      state.idStatsBusy = false;
+      setIdStatsBusy(false);
+      hideLoading('Готово', 'success');
+    }, 40);
+  }
+
+  function copyIdStats() {
+    var text = state.idStatsText || '';
+    if (!text) {
+      els.idStatsMessage.textContent = 'Сначала нажмите “Посчитать”.';
+      els.idStatsMessage.className = 'message error';
+      return;
+    }
+    setIdStatsCopyBusy(true);
+    showLoading('Копирую статистику...');
+    copyText(text, function(ok) {
+      hideLoading(ok ? 'Скопировано' : 'Ошибка копирования', ok ? 'success' : 'error');
+      setIdStatsCopyBusy(false);
+      els.idStatsMessage.textContent = ok ? 'Статистика скопирована.' : 'Не удалось скопировать автоматически. Выделите текст вручную.';
+      els.idStatsMessage.className = ok ? 'message success' : 'message error';
+    });
+  }
+
+  function calculateReport() {
+    if (state.reportBusy) return;
+    state.reportBusy = true;
+    setReportBusy(true, 'Считаю...');
+    showLoading('Считаю отчёт...');
+    var text = els.reportInput.value || '';
+    window.setTimeout(function() {
+      var rows = parseReportRows(text);
+      if (!rows.length) {
+        els.reportMessage.textContent = 'Вставьте строки из Google Таблицы.';
+        els.reportMessage.className = 'message error';
+        els.reportOutput.textContent = '';
+        state.reportBusy = false;
+        setReportBusy(false);
+        hideLoading('Нет данных', 'error');
+        return;
+      }
+
+      var stats = buildReportStats(rows);
+      var report = buildReportText(stats);
+      els.reportOutput.textContent = report;
+      els.reportMessage.textContent = 'Отчёт посчитан: ' + stats.total + ' строк.';
+      els.reportMessage.className = 'message success';
+      state.reportBusy = false;
+      setReportBusy(false);
+      hideLoading('Готово', 'success');
+    }, 40);
+  }
+
+  function copyReport() {
+    if (state.copyBusy) return;
+    state.copyBusy = true;
+    setCopyBusy(true);
+    showLoading('Копирую отчёт...');
+    var text = els.reportOutput.textContent;
+    if (!text) {
+      els.reportMessage.textContent = 'Сначала нажмите “Посчитать”.';
+      els.reportMessage.className = 'message error';
+    }
+    if (!text) {
+      state.copyBusy = false;
+      setCopyBusy(false);
+      hideLoading('Нет отчёта', 'error');
+      return;
+    }
+
+    copyText(text, function(ok) {
+      els.reportMessage.textContent = ok ? 'Отчёт скопирован.' : 'Не удалось скопировать автоматически. Выделите текст вручную.';
+      els.reportMessage.className = ok ? 'message success' : 'message error';
+      state.copyBusy = false;
+      setCopyBusy(false);
+      hideLoading(ok ? 'Скопировано' : 'Ошибка копирования', ok ? 'success' : 'error');
+    });
+  }
+
+  function setReportBusy(busy, label) {
+    els.reportCalculateBtn.disabled = busy;
+    els.reportCopyBtn.disabled = busy;
+    els.reportClearBtn.disabled = busy;
+    els.reportCloseBtn.disabled = busy;
+    els.reportCalculateBtn.textContent = busy ? (label || 'Считаю...') : 'Посчитать';
+    if (busy) {
+      els.reportMessage.textContent = label || 'Считаю...';
+      els.reportMessage.className = 'message';
+    }
+  }
+
+  function setCopyBusy(busy) {
+    els.reportCopyBtn.disabled = busy;
+    els.reportCopyBtn.textContent = busy ? 'Копирую...' : 'Скопировать отчёт';
+    if (busy) {
+      els.reportMessage.textContent = 'Копирую отчёт...';
+      els.reportMessage.className = 'message';
+    }
+  }
+
+  function setIdStatsBusy(busy, label) {
+    els.idStatsCalculateBtn.disabled = busy;
+    els.idStatsCopyBtn.disabled = busy;
+    els.idStatsClearBtn.disabled = busy;
+    els.idStatsCloseBtn.disabled = busy;
+    els.idStatsCalculateBtn.textContent = busy ? (label || 'Считаю...') : 'Посчитать';
+    if (busy) {
+      els.idStatsMessage.textContent = label || 'Считаю...';
+      els.idStatsMessage.className = 'message';
+    }
+  }
+
+  function setIdStatsCopyBusy(busy) {
+    els.idStatsCopyBtn.disabled = busy;
+    els.idStatsCopyBtn.textContent = busy ? 'Копирую...' : 'Скопировать';
+  }
+
+  function copyText(text, done) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function() {
+        done(true);
+      }).catch(function() {
+        fallbackCopyText(text, done);
+      });
+    } else {
+      fallbackCopyText(text, done);
+    }
+  }
+
+  function fallbackCopyText(text, done) {
+    var textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.setAttribute('readonly', 'readonly');
+    textarea.style.position = 'fixed';
+    textarea.style.left = '-9999px';
+    document.body.appendChild(textarea);
+    textarea.select();
+    var ok = false;
+    try {
+      ok = document.execCommand('copy');
+    } catch (error) {
+      ok = false;
+    }
+    textarea.remove();
+    done(ok);
+  }
+
+  function parseReportRows(text) {
+    var lines = String(text || '').split(/\r?\n/).filter(function(line) {
+      return normalizeText(line);
+    });
+    if (!lines.length) return [];
+
+    var parsed = lines.map(function(line) {
+      return line.split('\t');
+    });
+    var first = parsed[0].map(function(cell) { return normalizeHeader(cell); });
+    var hasHeader = first.some(function(cell) {
+      return cell === 'ответственный' || cell === 'статус поиска' || cell === 'статуспоиска';
+    });
+    var map = hasHeader ? buildReportHeaderMap(parsed[0]) : { employeeId: 10, status: 12 };
+    var start = hasHeader ? 1 : 0;
+    var rows = [];
+
+    for (var i = start; i < parsed.length; i += 1) {
+      var cells = parsed[i];
+      var employeeId = normalizeEmployeeId(cells[map.employeeId]);
+      var status = normalizeText(cells[map.status]);
+      if (!hasHeader && !status) status = normalizeText(cells[11]);
+      if (!hasHeader && !status) status = findReportStatusInRow(cells);
+      if (!cells.some(function(cell) { return normalizeText(cell); })) continue;
+      rows.push({ employeeId: employeeId, status: status });
+    }
+    return rows;
+  }
+
+  function findReportStatusInRow(cells) {
+    for (var i = cells.length - 1; i >= 0; i -= 1) {
+      var status = normalizeStatus(cells[i]);
+      if (status === 'найдено' || status === 'не найдено' || status === 'поиск') {
+        return normalizeText(cells[i]);
+      }
+    }
+    return '';
+  }
+
+  function buildReportHeaderMap(headerRow) {
+    var map = { employeeId: 10, status: 12 };
+    var actionIndex = -1;
+    headerRow.forEach(function(cell, index) {
+      var header = normalizeHeader(cell);
+      if (header === 'действия с товаром' || header === 'действиястоваром') actionIndex = index;
+      if (header.indexOf('id сотруд') !== -1 || header.indexOf('ид сотруд') !== -1 || header.indexOf('кто оставил') !== -1) {
+        map.employeeId = index;
+      }
+      if (header === 'статус поиска' || header === 'статуспоиска') map.status = index;
+    });
+    if (actionIndex > 0 && map.employeeId === 10) map.employeeId = actionIndex - 1;
+    return map;
+  }
+
+  function buildReportStats(rows) {
+    var stats = {
+      total: rows.length,
+      found: 0,
+      notFound: 0,
+      inSearch: 0,
+      responsibleCounts: {}
+    };
+
+    rows.forEach(function(row) {
+      var status = normalizeStatus(row.status);
+      if (status === 'найдено') {
+        stats.found += 1;
+        if (row.employeeId) {
+          stats.responsibleCounts[row.employeeId] = (stats.responsibleCounts[row.employeeId] || 0) + 1;
+        }
+      } else if (status === 'не найдено') {
+        stats.notFound += 1;
+      } else {
+        stats.inSearch += 1;
+      }
+    });
+    return stats;
+  }
+
+  function buildReportText(stats) {
+    var top = [];
+    var single = [];
+    Object.keys(stats.responsibleCounts).forEach(function(id) {
+      var count = stats.responsibleCounts[id];
+      if (count >= 2) {
+        top.push({ id: id, count: count });
+      } else {
+        single.push(id);
+      }
+    });
+
+    top.sort(function(a, b) {
+      return b.count - a.count || compareIds(a.id, b.id);
+    });
+    single.sort(compareIds);
+
+    var lines = [
+      'На поиске было: ' + stats.total + ' ШК',
+      'Найдено: ' + stats.found,
+      'Не найдено: ' + stats.notFound
+    ];
+    if (stats.inSearch > 0) {
+      lines.push('Ещё в поиске: ' + stats.inSearch);
+    }
+    lines.push('', 'Топ сотрудников, оставивших товар на МХ:');
+
+    if (top.length) {
+      top.forEach(function(item) {
+        lines.push(item.id + ' — ' + item.count);
+      });
+    } else {
+      lines.push('Нет сотрудников с повторами.');
+    }
+
+    lines.push('', 'Оставили по 1 разу:');
+    lines.push(single.length ? single.join(', ') : 'Нет.');
+    return lines.join('\n');
+  }
+
+  function extractIdsFromText(text) {
+    var matches = String(text || '').match(/\b\d{5,8}\b/g) || [];
+    return matches.filter(function(id) {
+      return id !== '1';
+    });
+  }
+
+  function extractIdsForStats(text, mode) {
+    var lines = String(text || '').split(/\r?\n/).filter(function(line) {
+      return normalizeText(line);
+    });
+    if (!lines.length) return [];
+
+    var tabRows = lines.map(function(line) { return line.split('\t'); });
+    var looksLikeRange = tabRows.some(function(cells) { return cells.length >= 13; });
+    if (!looksLikeRange) {
+      return mode === 'all' ? extractIdsFromText(text) : [];
+    }
+
+    var ids = [];
+    tabRows.forEach(function(cells, index) {
+      if (index === 0 && rowLooksLikeHeader(cells)) return;
+      var status = normalizeStatus(cells[12]);
+      if (mode === 'found' && status !== 'найдено') return;
+      if (mode === 'missing' && status !== 'не найдено') return;
+      var id = normalizeEmployeeId(cells[10]);
+      if (id) ids.push(id);
+    });
+    return ids;
+  }
+
+  function rowLooksLikeHeader(cells) {
+    return cells.some(function(cell) {
+      var header = normalizeHeader(cell);
+      return header === 'статус поиска' || header === 'действия с товаром' || header.indexOf('ид сотруд') !== -1 || header.indexOf('id сотруд') !== -1;
+    });
+  }
+
+  function buildIdStatsText(ids) {
+    var counts = {};
+    ids.forEach(function(id) {
+      counts[id] = (counts[id] || 0) + 1;
+    });
+    var rows = Object.keys(counts).map(function(id) {
+      return { id: id, count: counts[id] };
+    });
+    rows.sort(function(a, b) {
+      return b.count - a.count || compareIds(a.id, b.id);
+    });
+    return {
+      unique: rows.length,
+      rows: rows,
+      text: rows.map(function(row) {
+        return row.id + ' — ' + row.count + ' ' + pluralTimes(row.count);
+      }).join('\n')
+    };
+  }
+
+  function buildIdStatsRankingMarkup(rows) {
+    if (!rows.length) return '<div class="photoEmpty">Нет данных</div>';
+    var max = rows[0].count || 1;
+    return rows.map(function(row) {
+      var width = Math.max(6, Math.round((row.count / max) * 100));
+      return '<div class="idStatsRow">' +
+        '<div class="idStatsRowTop"><strong>' + esc(row.id) + '</strong><span>' + row.count + ' ' + esc(pluralTimes(row.count)) + '</span></div>' +
+        '<div class="idStatsBar"><i style="width:' + width + '%"></i></div>' +
+      '</div>';
+    }).join('');
+  }
+
+  function pluralTimes(count) {
+    var mod10 = count % 10;
+    var mod100 = count % 100;
+    if (mod10 === 1 && mod100 !== 11) return 'раз';
+    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'раза';
+    return 'раз';
+  }
+
+  function normalizeHeader(value) {
+    return normalizeText(value).toLowerCase().replace(/\s+/g, ' ');
+  }
+
+  function normalizeStatus(value) {
+    return normalizeText(value).toLowerCase().replace(/\s+/g, ' ');
+  }
+
+  function normalizeEmployeeId(value) {
+    var text = normalizeText(value);
+    var match = text.match(/\b\d{5,8}\b/);
+    if (!match) return '';
+    if (match[0] === '1') return '';
+    return match[0];
+  }
+
+  function compareIds(a, b) {
+    var numA = Number(String(a).replace(/\D/g, ''));
+    var numB = Number(String(b).replace(/\D/g, ''));
+    if (!isNaN(numA) && !isNaN(numB) && numA !== numB) return numA - numB;
+    return String(a).localeCompare(String(b), 'ru');
+  }
+
+  function compressImage(file, done, fail) {
+    var reader = new FileReader();
+    reader.onload = function() {
+      var img = new Image();
+      img.onload = function() {
+        var maxSide = 1600;
+        var ratio = Math.min(1, maxSide / Math.max(img.width, img.height));
+        var canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(img.width * ratio));
+        canvas.height = Math.max(1, Math.round(img.height * ratio));
+        var ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        done(canvas.toDataURL('image/jpeg', .78));
+      };
+      img.onerror = function() { fail('Не удалось прочитать изображение.'); };
+      img.src = reader.result;
+    };
+    reader.onerror = function() { fail('Не удалось открыть файл.'); };
+    reader.readAsDataURL(file);
+  }
+
+  function openPhotoViewer(dataUrl) {
+    els.photoViewerImg.src = dataUrl;
+    els.photoViewer.classList.remove('hidden');
+  }
+
+  function closePhotoViewer() {
+    els.photoViewer.classList.add('hidden');
+    els.photoViewerImg.src = '';
+  }
+
+  function setSync(text, iso) {
+    var suffix = iso ? ' • ' + formatTime(iso) : '';
+    els.syncText.textContent = text + suffix;
+    els.syncText.classList.toggle('loading', /загрузка|обновление|меняю|применяю|открываю/i.test(text));
+    if (els.mobileSyncText) els.mobileSyncText.textContent = text + suffix;
+  }
+
+  function showLoading(text, tone) {
+    els.loadingText.textContent = text || 'Загрузка...';
+    els.loadingOverlay.classList.remove('success', 'error');
+    if (tone) els.loadingOverlay.classList.add(tone);
+    els.loadingOverlay.classList.remove('hidden');
+  }
+
+  function hideLoading(text, tone) {
+    if (text) {
+      els.loadingText.textContent = text;
+      els.loadingOverlay.classList.remove('success', 'error');
+      if (tone) els.loadingOverlay.classList.add(tone);
+      els.loadingOverlay.classList.remove('hidden');
+      window.setTimeout(function() {
+        els.loadingOverlay.classList.add('hidden');
+        els.loadingOverlay.classList.remove('success', 'error');
+      }, tone === 'error' ? 3000 : 1000);
+      return;
+    }
+    els.loadingOverlay.classList.add('hidden');
+    els.loadingOverlay.classList.remove('success', 'error');
+  }
+
+  function formatTime(iso) {
+    try {
+      return new Date(iso).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+    } catch (error) {
+      return '';
+    }
+  }
+
+  function showToast(text, type) {
+    var toast = document.createElement('div');
+    toast.className = 'toast' + (type === 'error' ? ' error' : '');
+    toast.textContent = text;
+    els.toastStack.appendChild(toast);
+    window.setTimeout(function() {
+      toast.remove();
+    }, 3600);
+  }
+
+  function getErrorMessage(error) {
+    if (!error) return 'Неизвестная ошибка.';
+    return error.message || String(error);
+  }
+
+  function normalizeText(value) {
+    return String(value == null ? '' : value).trim();
+  }
+
+  function debounce(fn, wait) {
+    var timer = null;
+    return function() {
+      var args = arguments;
+      window.clearTimeout(timer);
+      timer = window.setTimeout(function() {
+        fn.apply(null, args);
+      }, wait);
+    };
+  }
+
+  function esc(value) {
+    return normalizeText(value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  function escAttr(value) {
+    return esc(value);
+  }
+})();
+</script>
+
+</body>
+</html>
